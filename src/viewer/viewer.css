@@ -645,6 +645,12 @@ kbd {
 }
 
 /* Go to: the last menu, at the right, its panel a search box with the matches under it. */
+/* The Game version menu: one button per installed version. */
+#version-list {
+	display: grid;
+	gap: 4px;
+}
+
 #goto {
 	margin-left: auto;
 }

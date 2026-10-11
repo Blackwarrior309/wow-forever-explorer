@@ -1,6 +1,7 @@
 import { droppedFolderToSource, filesToSource, hasDirectoryPicker, pickDirectory } from '../app/folderPicker';
 import { createStorageClient } from '../worker/client';
 import type { SourceInit } from '../worker/protocol';
+import type { ProductInfo } from '../casc/config';
 import type { Place } from '../explorer/places';
 import type { SpawnInfo } from '../explorer/spawns';
 import type { MapCategory, MapListing } from '../explorer/world';
@@ -83,14 +84,42 @@ function hideProgress(): void {
 	$('loading-fill').style.width = '0%';
 }
 
+const PRODUCT_KEY = 'mapExplorer.product';
+/** Every game version in the folder, for the Game version menu. */
+let installed: ProductInfo[] = [];
+/** Set once a game version has been opened: the viewer starts once per page, so another one takes a reload. */
+let exploring = false;
+
+/** The game version chosen in the Game version menu on an earlier visit, if any. */
+function savedProduct(): string | null {
+	try {
+		return localStorage.getItem(PRODUCT_KEY);
+	} catch {
+		// Storage blocked: the automatic choice.
+		return null;
+	}
+}
+
+/** Remembers a game version and reloads the page into it. */
+function switchProduct(product: string): void {
+	try {
+		localStorage.setItem(PRODUCT_KEY, product);
+	} catch {
+		// Not remembered: the reload comes back to the version it was.
+	}
+	location.reload();
+}
+
 async function useSource(init: SourceInit): Promise<void> {
 	showProgress('Reading .build.info');
 	try {
 		const products = (await storage.setSource(init)).filter((p) => p.product.startsWith('wow'));
+		installed = products;
 		const select = $<HTMLSelectElement>('product');
 		select.replaceChildren(...products.map((p) => new Option(`${p.product} ${p.version}`, p.product)));
-		// Prefer a classic build: the continent file IDs are the classic ones.
-		const preferred = products.find((p) => p.product === 'wow_classic_beta') ?? products.find((p) => p.product.startsWith('wow_classic'));
+		const saved = savedProduct();
+		// The version chosen before, if it's still installed. Otherwise prefer a classic build: the continent file IDs are the classic ones.
+		const preferred = products.find((p) => p.product === saved) ?? products.find((p) => p.product === 'wow_classic_beta') ?? products.find((p) => p.product.startsWith('wow_classic'));
 		if (preferred) {
 			// Nothing to choose: straight in.
 			select.value = preferred.product;
@@ -198,10 +227,33 @@ $('pick-direct').addEventListener('click', async () => {
 	}
 });
 
-$('explore').addEventListener('click', () => void explore());
+$('explore').addEventListener('click', () => {
+	// After a version that couldn't start, another one starts from a fresh page.
+	if (exploring) switchProduct($<HTMLSelectElement>('product').value);
+	else void explore();
+});
+
+/** The Game version menu: every version in the folder, the open one marked; choosing another reloads into it. */
+function setUpVersions(): void {
+	const current = $<HTMLSelectElement>('product').value;
+	$('version').hidden = installed.length < 2;
+	$('version-list').replaceChildren(...installed.map((p) => {
+		const button = document.createElement('button');
+		button.textContent = `${p.product} ${p.version}`;
+		if (p.product === current) {
+			button.className = 'primary';
+			button.setAttribute('aria-current', 'true');
+			button.title = 'The version open now';
+		} else {
+			button.addEventListener('click', () => switchProduct(p.product));
+		}
+		return button;
+	}));
+}
 
 /** Opens the chosen game version and starts the viewer. */
 async function explore(): Promise<void> {
+	exploring = true;
 	const button = $<HTMLButtonElement>('explore');
 	button.disabled = true;
 	for (const id of ['pick', 'pick-direct']) $<HTMLButtonElement>(id).disabled = true;
@@ -229,6 +281,7 @@ async function explore(): Promise<void> {
 		setUpMinimap(viewer, minimapArrow);
 		void setUpGoTo(viewer);
 		setUpHighlights(viewer);
+		setUpVersions();
 		setUpTravel(viewer, minimapArrow);
 		setUpWalking(viewer);
 		setUpEmotes(viewer);
@@ -239,6 +292,8 @@ async function explore(): Promise<void> {
 		setStatus(`Could not start: ${(e as Error).message}`, true);
 		button.disabled = false;
 		for (const id of ['pick', 'pick-direct']) $<HTMLButtonElement>(id).disabled = false;
+		// A way out of a version that doesn't start, which would otherwise be opened again every time.
+		if (installed.length > 1) $('product-step').hidden = false;
 	}
 }
 

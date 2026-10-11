@@ -114,7 +114,8 @@ async function useSource(init: SourceInit): Promise<void> {
 	showProgress('Reading .build.info');
 	try {
 		const products = (await storage.setSource(init)).filter((p) => p.product.startsWith('wow'));
-		installed = products;
+		// Once each: a version can be listed with several builds, and opening it picks the one that can be read.
+		installed = products.filter((p, i) => products.findIndex((q) => q.product === p.product) === i);
 		const select = $<HTMLSelectElement>('product');
 		select.replaceChildren(...products.map((p) => new Option(`${p.product} ${p.version}`, p.product)));
 		const saved = savedProduct();

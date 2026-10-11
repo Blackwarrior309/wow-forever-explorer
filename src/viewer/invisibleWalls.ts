@@ -53,33 +53,51 @@ export function surfaceTree(positions: THREE.BufferAttribute, indices: THREE.Buf
 const point = new THREE.Vector3();
 const closest = new THREE.Vector3();
 
-/** Whether any triangle of a surface before index position `end` comes within `near` of the point. */
-function hasSurfaceNear(surface: MeshBVH, end: number, near: number): boolean {
+/** A run of triangles in an index buffer: its first index position and how many positions. */
+export interface IndexRange {
+	start: number;
+	count: number;
+}
+
+/**
+ * The most a texture's opacity may reach (of 255) for what it's drawn on to count as unseen:
+ * an invisible wall's texture is see-through all over.
+ */
+export const UNSEEN_OPACITY = 32;
+
+/** Whether any drawn triangle of a surface comes within `near` of the point; hidden: its runs that aren't drawn. */
+function hasSurfaceNear(surface: MeshBVH, hidden: IndexRange[], near: number): boolean {
 	return surface.shapecast({
 		intersectsBounds: (box: THREE.Box3) => box.distanceToPoint(point) <= near,
-		intersectsTriangle: (triangle: ExtendedTriangle, index: number) => index * 3 < end && triangle.closestPointToPoint(point, closest).distanceTo(point) <= near,
+		intersectsTriangle: (triangle: ExtendedTriangle, index: number) =>
+			!hidden.some((r) => index * 3 >= r.start && index * 3 < r.start + r.count) && triangle.closestPointToPoint(point, closest).distanceTo(point) <= near,
 	});
 }
 
 /**
- * The collision triangles (count index entries from start) with nothing drawn near them:
- * invisible walls, rather than the collision of something that can be seen. A triangle counts
- * when a corner or its middle is further than `near` from every triangle of the drawn surface,
- * which is those of `surface` before index position `drawnEnd`. Null if there are none.
+ * The collision triangles (the runs of an index buffer) with nothing drawn near them: invisible
+ * walls, rather than the collision of something that can be seen. A triangle counts when a
+ * corner or its middle is further than `near` from every drawn triangle of `surface`, which is
+ * all of it but the `hidden` runs; with no surface, they all count. Null if there are none.
  */
-export function bareTriangles(positions: THREE.BufferAttribute, indices: ArrayLike<number>, start: number, count: number, surface: MeshBVH, drawnEnd: number, near: number): Uint32Array | null {
+export function bareTriangles(positions: THREE.BufferAttribute, indices: ArrayLike<number>, runs: IndexRange[], surface: MeshBVH | null, hidden: IndexRange[], near: number): Uint32Array | null {
 	const bare: number[] = [];
 	const corners = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-	for (let i = start; i + 2 < start + count; i += 3) {
-		for (let k = 0; k < 3; k++) corners[k].fromBufferAttribute(positions, indices[i + k]);
-		// The middle first: a wall across a doorway has its corners on the frame.
-		point.copy(corners[0]).add(corners[1]).add(corners[2]).divideScalar(3);
-		let covered = hasSurfaceNear(surface, drawnEnd, near);
-		for (let k = 0; covered && k < 3; k++) {
-			point.copy(corners[k]);
-			covered = hasSurfaceNear(surface, drawnEnd, near);
+	for (const { start, count } of runs) {
+		for (let i = start; i + 2 < start + count; i += 3) {
+			let covered = false;
+			if (surface) {
+				for (let k = 0; k < 3; k++) corners[k].fromBufferAttribute(positions, indices[i + k]);
+				// The middle first: a wall across a doorway has its corners on the frame.
+				point.copy(corners[0]).add(corners[1]).add(corners[2]).divideScalar(3);
+				covered = hasSurfaceNear(surface, hidden, near);
+				for (let k = 0; covered && k < 3; k++) {
+					point.copy(corners[k]);
+					covered = hasSurfaceNear(surface, hidden, near);
+				}
+			}
+			if (!covered) bare.push(indices[i], indices[i + 1], indices[i + 2]);
 		}
-		if (!covered) bare.push(indices[i], indices[i + 1], indices[i + 2]);
 	}
 	return bare.length ? Uint32Array.from(bare) : null;
 }

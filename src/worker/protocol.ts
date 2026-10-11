@@ -49,6 +49,7 @@ export interface StorageApi {
 	loadFont(fdid: number): Uint8Array;
 	loadInterfaceImages(paths: string[]): (Image | null)[];
 	loadImages(fdids: number[]): (Image | null)[];
+	textureOpacity(fdids: number[]): number[];
 	loadWorldMaps(mapIds: number[]): WorldMapInfo[];
 }
 

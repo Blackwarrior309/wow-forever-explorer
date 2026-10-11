@@ -116,6 +116,9 @@ const api: AsyncStorageApi = {
 	async loadImages(fdids) {
 		return requireWorld().loadImages(fdids);
 	},
+	async textureOpacity(fdids) {
+		return requireWorld().textureOpacity(fdids);
+	},
 	async loadWorldMaps(mapIds) {
 		return requireWorld().loadWorldMaps(mapIds);
 	},

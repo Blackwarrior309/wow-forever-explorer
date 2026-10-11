@@ -427,6 +427,23 @@ export class WorldLoader {
 		}));
 	}
 
+	/**
+	 * How opaque each texture gets anywhere, 0 to 255 (255 for one that can't be read): 0 is a
+	 * texture nothing shows of, as invisible walls are drawn with. From a small copy of it.
+	 */
+	async textureOpacity(fdids: number[]): Promise<number[]> {
+		return Promise.all(fdids.map(async (fdid) => {
+			try {
+				const { rgba } = decodeBlp(await this.storage.readFile(fdid), 128);
+				let most = 0;
+				for (let i = 3; i < rgba.length; i += 4) most = Math.max(most, rgba[i]);
+				return most;
+			} catch {
+				return 255;
+			}
+		}));
+	}
+
 	/** A sound file's bytes (the music tracks are MP3s). */
 	async loadSound(fdid: number): Promise<Uint8Array> {
 		// A copy: the result is transferred to the main thread, and the storage may cache what it read.

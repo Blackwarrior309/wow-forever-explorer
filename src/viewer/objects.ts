@@ -5,7 +5,8 @@ import type { SpawnInfo } from '../explorer/spawns';
 import type { AsyncStorageApi } from '../worker/protocol';
 import { createModelMaterial, createSkinnedDepthMaterial, type SkinUniforms } from './modelMaterials';
 import { applyWalkable } from './walkable';
-import { WALL_MATERIAL, WMO_NEAR, bareTriangles, doodadNear, surfaceTree } from './invisibleWalls';
+import { UNSEEN_OPACITY, WALL_MATERIAL, WMO_NEAR, bareTriangles, doodadNear, surfaceTree, type IndexRange } from './invisibleWalls';
+import { Blend } from '../formats/m2';
 import { Mover, type GroundAt } from './movers';
 import { perf } from './perf';
 import { PARTICLE_RANGE, SHOT_PARTICLE_RANGE, ParticleSystem, type EmitterSource, type LoadedEmitter } from './particles';
@@ -86,7 +87,8 @@ class ModelEntry {
 	collider: { geometry: THREE.BufferGeometry; mesh: THREE.Mesh; matrices: THREE.Matrix4[]; spheres: Float32Array } | null = null;
 	/**
 	 * While invisible walls are shown: the model's collision that nothing drawn covers (no geometry
-	 * if it has none), instanced like the model. Worked out the first time they're shown.
+	 * if it has none, or until it's worked out), instanced like the model. Worked out the first
+	 * time they're shown.
 	 */
 	walls: { geometry: THREE.BufferGeometry | null; mesh: THREE.InstancedMesh | null } | null = null;
 	/** Particle emitters (fire, smoke), with their textures. */
@@ -716,7 +718,10 @@ export class ObjectManager {
 		if (entry.animation) this.writePhases(entry.mesh, entry.geometry, entry.drawnKeys, entry.animation.duration);
 		if (entry.collider) ObjectManager.placeCollider(entry.collider, matrices);
 		if (this.wallsShown) {
-			entry.walls ??= { geometry: this.wallGeometry(entry), mesh: null };
+			if (!entry.walls) {
+				entry.walls = { geometry: null, mesh: null };
+				void this.findWalls(entry, entry.walls);
+			}
 			// After the liquids, so a wall under water still shows.
 			if (entry.walls.geometry) entry.walls.mesh = this.syncMesh(entry.walls.mesh, entry.walls.geometry, WALL_MATERIAL, matrices, 2, 'receive');
 		} else if (entry.walls?.mesh) {
@@ -743,23 +748,76 @@ export class ObjectManager {
 		for (const entry of this.models.values()) entry.dirty = true;
 	}
 
-	/** A model's collision triangles that nothing drawn covers, to draw over it; null if there are none. */
-	private wallGeometry(entry: ModelEntry): THREE.BufferGeometry | null {
+	/** How opaque each texture gets (see WorldLoader.textureOpacity), asked for once. */
+	private readonly opacities = new Map<number, Promise<number>>();
+
+	/**
+	 * The runs of a model's triangles that are drawn with a texture nothing shows of: an
+	 * invisible wall made as an ordinary surface. Only see-through blends can be.
+	 */
+	private async unseenRuns(entry: ModelEntry): Promise<IndexRange[]> {
+		const batches = (entry.data?.batches ?? []).filter((b) => !b.material.collision);
+		const keyed = (b: (typeof batches)[number]) => (b.material.blend === Blend.AlphaKey || b.material.blend === Blend.Alpha) && b.material.texture > 0;
+		const asked = [...new Set(batches.filter(keyed).map((b) => b.material.texture))].filter((fdid) => !this.opacities.has(fdid));
+		if (asked.length) {
+			const answer = this.storage.textureOpacity(asked);
+			asked.forEach((fdid, i) => this.opacities.set(fdid, answer.then((levels) => levels[i], () => 255)));
+		}
+		const unseen = await Promise.all(batches.map(async (b) => keyed(b) && (await this.opacities.get(b.material.texture)!) < UNSEEN_OPACITY));
+		// A run drawn twice (a base and a layer over it) is unseen only if every layer is.
+		const seen = new Set(batches.filter((_, i) => !unseen[i]).map((b) => `${b.start}:${b.count}`));
+		const runs = new Map<string, IndexRange>();
+		batches.forEach((b, i) => {
+			if (unseen[i] && !seen.has(`${b.start}:${b.count}`)) runs.set(`${b.start}:${b.count}`, { start: b.start, count: b.count });
+		});
+		return [...runs.values()];
+	}
+
+	/** Works out a model's invisible walls and has them drawn; walls: the entry's record of them, to fill in. */
+	private async findWalls(entry: ModelEntry, walls: NonNullable<ModelEntry['walls']>): Promise<void> {
+		let geometry: THREE.BufferGeometry | null = null;
+		try {
+			geometry = this.wallGeometry(entry, await this.unseenRuns(entry));
+		} catch (e) {
+			console.warn(`Invisible walls of ${entry.kind} ${entry.fdid}:`, e);
+		}
+		// The model may have been unloaded meanwhile.
+		if (entry.walls !== walls || !entry.geometry) {
+			geometry?.dispose();
+			return;
+		}
+		walls.geometry = geometry;
+		if (geometry) entry.dirty = true;
+	}
+
+	/**
+	 * A model's collision triangles that nothing drawn covers, to draw over it; null if there are
+	 * none. unseen: the runs of its triangles drawn with a texture nothing shows of.
+	 */
+	private wallGeometry(entry: ModelEntry, unseen: IndexRange[]): THREE.BufferGeometry | null {
 		const drawn = entry.geometry;
 		if (!drawn?.index) return null;
 		const drawnPositions = drawn.getAttribute('position') as THREE.BufferAttribute;
 		let positions = drawnPositions;
 		let bare: Uint32Array | null;
 		if (entry.collider) {
-			// A doodad or game object: its collision mesh, against the triangles it's drawn with.
+			// A doodad or game object: its collision mesh, against the triangles it's drawn with that can be seen.
 			const hull = entry.collider.geometry;
 			positions = hull.getAttribute('position') as THREE.BufferAttribute;
-			bare = bareTriangles(positions, hull.index!.array, 0, hull.index!.count, surfaceTree(drawnPositions, drawn.index), Infinity, doodadNear(entry.radius));
+			const index = drawn.index.array;
+			const visible: number[] = [];
+			const batches = (entry.data?.batches ?? []).filter((b) => !unseen.some((r) => r.start === b.start && r.count === b.count));
+			for (const key of new Set(batches.map((b) => `${b.start}:${b.count}`))) {
+				const [start, count] = key.split(':').map(Number);
+				for (let i = start; i < start + count; i++) visible.push(index[i]);
+			}
+			const surface = visible.length ? surfaceTree(drawnPositions, new THREE.BufferAttribute(Uint32Array.from(visible), 1)) : null;
+			bare = bareTriangles(positions, hull.index!.array, [{ start: 0, count: hull.index!.count }], surface, [], doodadNear(entry.radius));
 		} else {
-			// A building: its collision-only triangles, which come last, against those before them.
-			const batch = entry.data?.batches.find((b) => b.material.collision);
-			if (!batch || !drawn.boundsTree) return null;
-			bare = bareTriangles(positions, drawn.index.array, batch.start, batch.count, drawn.boundsTree as MeshBVH, batch.start, WMO_NEAR);
+			// A building: its collision-only triangles and those drawn unseen, against the rest.
+			const hidden = [...(entry.data?.batches ?? []).filter((b) => b.material.collision).map((b) => ({ start: b.start, count: b.count })), ...unseen];
+			if (!hidden.length || !drawn.boundsTree) return null;
+			bare = bareTriangles(positions, drawn.index.array, hidden, drawn.boundsTree as MeshBVH, hidden, WMO_NEAR);
 		}
 		if (!bare) return null;
 		const geometry = new THREE.BufferGeometry();
@@ -869,6 +927,7 @@ export class ObjectManager {
 			entry.walls.mesh.dispose();
 		}
 		entry.walls?.geometry?.dispose();
+		entry.walls = null;
 		if (entry.mesh) {
 			this.group.remove(entry.mesh);
 			entry.mesh.dispose();

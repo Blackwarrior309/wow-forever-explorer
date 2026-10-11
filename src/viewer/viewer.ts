@@ -657,6 +657,7 @@ export class Viewer {
 		this.highlights?.set(settings);
 		setWalkableShown(settings.on && settings.walkable);
 		if (this.objects) this.objects.invisibleWalls = settings.on && settings.walls;
+		if (this.terrain) this.terrain.invisibleWalls = settings.on && settings.walls;
 		this.regionOverlay?.setMode(settings.on ? settings.tint || null : null);
 		this.regionOverlay?.setLevel(settings.level);
 		if (this.restedAreas) this.restedAreas.shown = settings.on && settings.rested;

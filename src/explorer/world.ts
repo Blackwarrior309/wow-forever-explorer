@@ -22,6 +22,8 @@ import { buildTerrainMesh, type TerrainGeometry } from './terrainMesh';
 const MPHD_BIG_ALPHA = 0x4 | 0x80;
 /** MCNK flag: 4-bit alpha maps are already 64x64 and need no fix-up. */
 const MCNK_DO_NOT_FIX_ALPHA = 0x8000;
+/** MCNK flag: the chunk can't be walked onto. */
+const MCNK_IMPASSABLE = 0x2;
 
 /** A map entered through an area trigger (a dungeon, mostly): what to lay out in the world. */
 export interface InstanceMap {
@@ -88,6 +90,8 @@ export interface NearTile {
 	sea: Uint8Array;
 	/** AreaTable ID per chunk (y * 16 + x). */
 	areaIds: Uint32Array;
+	/** 1 per chunk (y * 16 + x) the map marks as impassable: ground that can't be walked onto, whatever its slope. */
+	impassable: Uint8Array;
 	/** What grows on the ground (grass, flowers, pebbles), or null for none. */
 	clutter: ClutterSource | null;
 	/** What each cell sounds like underfoot: 128x128 footstep sound groups (TerrainType), or null if unknown. */
@@ -217,13 +221,15 @@ export class WorldLoader {
 		}
 		const areaIds = new Uint32Array(256);
 		for (const c of root.chunks) areaIds[c.indexY * 16 + c.indexX] = c.areaId;
+		const impassable = new Uint8Array(256);
+		for (const c of root.chunks) if (c.flags & MCNK_IMPASSABLE) impassable[c.indexY * 16 + c.indexX] = 1;
 
 		if (texBytes) {
 			const tex = parseAdtTex(texBytes, (wdt.flags & MPHD_BIG_ALPHA) !== 0, (i) => !(root.chunks[i]?.flags & MCNK_DO_NOT_FIX_ALPHA));
 			const terrain = buildSplatTerrain(root, tex);
 			const clutter = groundEffects?.source(root, tex, terrain.heights, tileGrids(root).inner, terrain.holes) ?? null;
 			const ground = groundEffects?.groundSounds(root, tex) ?? null;
-			return { x, y, terrain, fallback: null, heights: terrain.heights, holes: terrain.holes, liquids, sea, areaIds, clutter, ground, flow };
+			return { x, y, terrain, fallback: null, heights: terrain.heights, holes: terrain.holes, liquids, sea, areaIds, impassable, clutter, ground, flow };
 		}
 		const grids = tileGrids(root);
 		return {
@@ -239,6 +245,7 @@ export class WorldLoader {
 			liquids,
 			sea,
 			areaIds,
+			impassable,
 			clutter: null,
 			ground: null,
 			flow,

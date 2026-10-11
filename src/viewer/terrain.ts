@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TILE_CELLS, TILE_SIZE } from '../formats/adt';
+import { CHUNKS_PER_TILE, TILE_CELLS, TILE_SIZE } from '../formats/adt';
 import { WDL_CELLS } from '../formats/wdl';
 import { ALPHA_ATLAS_SIZE, type SplatGeometry } from '../explorer/splatMesh';
 import type { FarTile, NearTile } from '../explorer/world';
@@ -12,6 +12,7 @@ import { createAlphaTexture, createFarMaterial, createSplatMaterial, liquidMater
 import { FAR_BATCH_LAYERS, FarBatch, type FarEntry } from './farBatch';
 import { perf } from './perf';
 import { useShadows } from './shadows';
+import { WALL_MATERIAL } from './invisibleWalls';
 import { createTexture } from './textures';
 
 /** Full-detail tiles load within this distance of the camera and unload beyond the drop distance. */
@@ -81,6 +82,10 @@ interface NearState {
 	sharedTextures: number[];
 	/** The tile's liquid surfaces (lakes, rivers, sea). */
 	liquids: THREE.Mesh[];
+	/** 1 per chunk (y * 16 + x) the map marks as impassable, or null if it marks none. */
+	impassable: Uint8Array | null;
+	/** Those chunks' ground, drawn over while invisible walls are shown. */
+	walls: THREE.Mesh | null;
 }
 
 export interface TerrainStats {
@@ -119,6 +124,9 @@ function liquidGeometry(positions: Float32Array, indices: Uint32Array): THREE.Bu
 }
 
 /** Bilinear sample of an (n+1)x(n+1) outer height grid at tile-local coordinates. */
+/** Yards the impassable ground's overlay sits above the ground. */
+const IMPASSABLE_LIFT = 0.4;
+
 function sampleGrid(heights: Float32Array, n: number, lx: number, lz: number): number {
 	const fx = THREE.MathUtils.clamp((lx / TILE_SIZE) * n, 0, n);
 	const fz = THREE.MathUtils.clamp((lz / TILE_SIZE) * n, 0, n);
@@ -527,6 +535,7 @@ export class TerrainManager {
 			t.nearHoles = tile.holes;
 			t.nearGround = tile.ground;
 			t.areaIds = tile.areaIds;
+			this.syncWalls(t);
 			// Kept after the tile drops back to low detail: it's what the map says, not a guess.
 			t.seaChunks = tile.sea;
 			this.clutter?.addTile(TerrainManager.objectKey(t), t.originX, t.originZ, tile.clutter);
@@ -544,7 +553,7 @@ export class TerrainManager {
 
 	/** originX, originZ: the tile's corner in the world, where it will be placed. */
 	private buildNear(tile: NearTile, textures: Map<number, THREE.Texture | null>, sharedTextures: number[], originX: number, originZ: number): NearState {
-		const state: NearState = { object: new THREE.Group(), geometries: [], materials: [], ownTextures: [], flowMaterials: [], sharedTextures, liquids: [] };
+		const state: NearState = { object: new THREE.Group(), geometries: [], materials: [], ownTextures: [], flowMaterials: [], sharedTextures, liquids: [], impassable: tile.impassable.includes(1) ? tile.impassable : null, walls: null };
 		const add = (geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]) => {
 			const mesh = new THREE.Mesh(geometry, material);
 			mesh.matrixAutoUpdate = false;
@@ -596,11 +605,63 @@ export class TerrainManager {
 		return state;
 	}
 
+	private wallsShown = false;
+
+	/** Draws the ground the map marks as impassable in the invisible walls' colour (see invisibleWalls.ts). */
+	set invisibleWalls(shown: boolean) {
+		if (shown === this.wallsShown) return;
+		this.wallsShown = shown;
+		for (const t of this.tiles.values()) this.syncWalls(t);
+	}
+
+	/** Adds or removes a detailed tile's impassable ground, as invisible walls are shown or not. */
+	private syncWalls(t: TileState): void {
+		const near = t.near;
+		if (!near?.impassable || !t.nearHeights || this.wallsShown === !!near.walls) return;
+		if (near.walls) {
+			near.object.remove(near.walls);
+			near.walls.geometry.dispose();
+			near.walls = null;
+			return;
+		}
+		const cells = TILE_CELLS / CHUNKS_PER_TILE;
+		const row = TILE_CELLS + 1;
+		const size = TILE_SIZE / TILE_CELLS;
+		const positions: number[] = [];
+		const indices: number[] = [];
+		near.impassable.forEach((marked, chunk) => {
+			if (!marked) return;
+			const x0 = (chunk % CHUNKS_PER_TILE) * cells;
+			const z0 = Math.floor(chunk / CHUNKS_PER_TILE) * cells;
+			const base = positions.length / 3;
+			// Lifted a little: the ground's own mesh has a point in the middle of each cell, which can stand above this.
+			for (let z = z0; z <= z0 + cells; z++) {
+				for (let x = x0; x <= x0 + cells; x++) positions.push(x * size, t.nearHeights![z * row + x] + IMPASSABLE_LIFT, z * size);
+			}
+			for (let z = 0; z < cells; z++) {
+				for (let x = 0; x < cells; x++) {
+					const a = base + z * (cells + 1) + x;
+					indices.push(a, a + cells + 1, a + 1, a + 1, a + cells + 1, a + cells + 2);
+				}
+			}
+		});
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+		geometry.setIndex(indices);
+		near.walls = new THREE.Mesh(geometry, WALL_MATERIAL);
+		near.walls.matrixAutoUpdate = false;
+		// After the water, so marked ground under it still shows.
+		near.walls.renderOrder = 2;
+		near.object.add(near.walls);
+		near.walls.updateMatrixWorld(true);
+	}
+
 	private dropNear(t: TileState): void {
 		if (!t.near) return;
 		perf.log('tile', `${t.continent.name} ${t.x}_${t.y}: dropped`);
 		const near = t.near;
 		this.group.remove(near.object);
+		near.walls?.geometry.dispose();
 		for (const g of near.geometries) g.dispose();
 		for (const m of near.materials) m.dispose();
 		for (const tex of near.ownTextures) tex.dispose();

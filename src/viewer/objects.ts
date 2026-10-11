@@ -5,6 +5,7 @@ import type { SpawnInfo } from '../explorer/spawns';
 import type { AsyncStorageApi } from '../worker/protocol';
 import { createModelMaterial, createSkinnedDepthMaterial, type SkinUniforms } from './modelMaterials';
 import { applyWalkable } from './walkable';
+import { WALL_MATERIAL, WMO_NEAR, bareTriangles, doodadNear, surfaceTree } from './invisibleWalls';
 import { Mover, type GroundAt } from './movers';
 import { perf } from './perf';
 import { PARTICLE_RANGE, SHOT_PARTICLE_RANGE, ParticleSystem, type EmitterSource, type LoadedEmitter } from './particles';
@@ -83,6 +84,11 @@ class ModelEntry {
 	 * bounding sphere in world space (x, y, z, radius), so a cast skips the copies it can't reach.
 	 */
 	collider: { geometry: THREE.BufferGeometry; mesh: THREE.Mesh; matrices: THREE.Matrix4[]; spheres: Float32Array } | null = null;
+	/**
+	 * While invisible walls are shown: the model's collision that nothing drawn covers (no geometry
+	 * if it has none), instanced like the model. Worked out the first time they're shown.
+	 */
+	walls: { geometry: THREE.BufferGeometry | null; mesh: THREE.InstancedMesh | null } | null = null;
 	/** Particle emitters (fire, smoke), with their textures. */
 	emitters: LoadedEmitter[] = [];
 	/** Instance key for each slot in the instance buffer, for picking. */
@@ -324,6 +330,7 @@ export class ObjectManager {
 		if (!entry.mesh || slot === undefined) return;
 		entry.mesh.setMatrixAt(slot, matrix);
 		for (const l of entry.liquids) l.mesh?.setMatrixAt(slot, matrix);
+		entry.walls?.mesh?.setMatrixAt(slot, matrix);
 		this.moved.add(entry);
 	}
 
@@ -388,7 +395,7 @@ export class ObjectManager {
 			}
 		}
 		for (const entry of this.moved) {
-			for (const mesh of [entry.mesh, ...entry.liquids.map((l) => l.mesh)]) {
+			for (const mesh of [entry.mesh, entry.walls?.mesh, ...entry.liquids.map((l) => l.mesh)]) {
 				if (!mesh) continue;
 				mesh.instanceMatrix.needsUpdate = true;
 				mesh.computeBoundingSphere();
@@ -708,11 +715,58 @@ export class ObjectManager {
 		if (entry.depthMaterial) entry.mesh.customDepthMaterial = entry.depthMaterial;
 		if (entry.animation) this.writePhases(entry.mesh, entry.geometry, entry.drawnKeys, entry.animation.duration);
 		if (entry.collider) ObjectManager.placeCollider(entry.collider, matrices);
+		if (this.wallsShown) {
+			entry.walls ??= { geometry: this.wallGeometry(entry), mesh: null };
+			// After the liquids, so a wall under water still shows.
+			if (entry.walls.geometry) entry.walls.mesh = this.syncMesh(entry.walls.mesh, entry.walls.geometry, WALL_MATERIAL, matrices, 2, 'receive');
+		} else if (entry.walls?.mesh) {
+			this.group.remove(entry.walls.mesh);
+			entry.walls.mesh.dispose();
+			entry.walls.mesh = null;
+		}
 		for (const liquid of entry.liquids) {
 			// Liquids draw after the building so it shows through the surface.
 			liquid.mesh = this.syncMesh(liquid.mesh, liquid.geometry, liquid.material, matrices, 1, 'receive');
 			liquid.mesh.userData.liquidType = liquid.type;
 		}
+	}
+
+	private wallsShown = false;
+
+	/**
+	 * Draws the collision that has nothing drawn on it, invisible walls, as see-through violet
+	 * surfaces (see invisibleWalls.ts). Off, nothing of it is kept in the scene.
+	 */
+	set invisibleWalls(shown: boolean) {
+		if (shown === this.wallsShown) return;
+		this.wallsShown = shown;
+		for (const entry of this.models.values()) entry.dirty = true;
+	}
+
+	/** A model's collision triangles that nothing drawn covers, to draw over it; null if there are none. */
+	private wallGeometry(entry: ModelEntry): THREE.BufferGeometry | null {
+		const drawn = entry.geometry;
+		if (!drawn?.index) return null;
+		const drawnPositions = drawn.getAttribute('position') as THREE.BufferAttribute;
+		let positions = drawnPositions;
+		let bare: Uint32Array | null;
+		if (entry.collider) {
+			// A doodad or game object: its collision mesh, against the triangles it's drawn with.
+			const hull = entry.collider.geometry;
+			positions = hull.getAttribute('position') as THREE.BufferAttribute;
+			bare = bareTriangles(positions, hull.index!.array, 0, hull.index!.count, surfaceTree(drawnPositions, drawn.index), Infinity, doodadNear(entry.radius));
+		} else {
+			// A building: its collision-only triangles, which come last, against those before them.
+			const batch = entry.data?.batches.find((b) => b.material.collision);
+			if (!batch || !drawn.boundsTree) return null;
+			bare = bareTriangles(positions, drawn.index.array, batch.start, batch.count, drawn.boundsTree as MeshBVH, batch.start, WMO_NEAR);
+		}
+		if (!bare) return null;
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute('position', positions);
+		geometry.setIndex(new THREE.BufferAttribute(bare, 1));
+		geometry.computeBoundingSphere();
+		return geometry;
 	}
 
 	private static readonly COLLIDER_MATERIAL = new THREE.MeshBasicMaterial();
@@ -810,6 +864,11 @@ export class ObjectManager {
 	}
 
 	private dispose(entry: ModelEntry): void {
+		if (entry.walls?.mesh) {
+			this.group.remove(entry.walls.mesh);
+			entry.walls.mesh.dispose();
+		}
+		entry.walls?.geometry?.dispose();
 		if (entry.mesh) {
 			this.group.remove(entry.mesh);
 			entry.mesh.dispose();

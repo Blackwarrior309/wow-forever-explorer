@@ -1144,6 +1144,7 @@ function setUpHighlights(viewer: Viewer): void {
 	const on = $<HTMLInputElement>('highlight-on');
 	const query = $<HTMLInputElement>('highlight-query');
 	const walkable = $<HTMLInputElement>('highlight-walkable');
+	const walls = $<HTMLInputElement>('highlight-walls');
 	const tint = $<HTMLSelectElement>('highlight-tint');
 	const level = $<HTMLInputElement>('tint-level');
 	const levelOut = $('tint-level-out');
@@ -1153,6 +1154,7 @@ function setUpHighlights(viewer: Viewer): void {
 	on.checked = saved.on ?? false;
 	query.value = saved.query ?? '';
 	walkable.checked = saved.walkable ?? false;
+	walls.checked = saved.walls ?? false;
 	// Saved before the tints came in: the graveyards had a box of their own.
 	tint.value = saved.tint ?? ((saved as { graveyards?: boolean }).graveyards ? 'graveyards' : '');
 	level.value = String(saved.level ?? 20);
@@ -1165,6 +1167,7 @@ function setUpHighlights(viewer: Viewer): void {
 			groups: boxes.filter((b) => b.checked).map((b) => b.value as HighlightGroup),
 			query: query.value,
 			walkable: walkable.checked,
+			walls: walls.checked,
 			tint: tint.value as TintMode | '',
 			level: Number(level.value),
 			rested: rested.checked,
@@ -1173,11 +1176,12 @@ function setUpHighlights(viewer: Viewer): void {
 		panel.dataset.tint = settings.tint;
 		panel.classList.toggle('off', !settings.on);
 		panel.classList.toggle('walkable', settings.walkable);
+		panel.classList.toggle('walls', settings.walls);
 		viewer.setHighlights(settings);
 		save(HIGHLIGHT_KEY, settings);
 		showTintKey(viewer);
 	};
-	for (const box of [on, walkable, rested, tint, ...boxes]) {
+	for (const box of [on, walkable, walls, rested, tint, ...boxes]) {
 		box.addEventListener('change', () => {
 			// Choosing a kind turns highlighting on.
 			if (box !== on && (box instanceof HTMLSelectElement ? box.value : box.checked)) on.checked = true;

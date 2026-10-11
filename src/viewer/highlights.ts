@@ -16,6 +16,8 @@ export interface HighlightSettings {
 	query: string;
 	/** Tint terrain and buildings by whether their slopes can be walked on (see walkable.ts). */
 	walkable: boolean;
+	/** Draw the collision that has nothing drawn on it (see invisibleWalls.ts). */
+	walls: boolean;
 	/** What the ground is tinted by (see regionOverlay.ts); '' for nothing. */
 	tint: TintMode | '';
 	/** The player level creature levels are coloured for. */
@@ -68,7 +70,7 @@ const LIFT = 1;
  * node can appear, while the server only fills some of them at a time.
  */
 export class Highlights {
-	private settings: HighlightSettings = { on: false, groups: [], query: '', walkable: false, tint: '', level: 20, rested: false };
+	private settings: HighlightSettings = { on: false, groups: [], query: '', walkable: false, walls: false, tint: '', level: 20, rested: false };
 	private readonly maps = new Map<number, Target[] | 'pending' | null>();
 	private readonly pool: HTMLDivElement[] = [];
 	private readonly projected = new THREE.Vector3();

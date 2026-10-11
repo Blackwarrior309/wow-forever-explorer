@@ -951,7 +951,8 @@ kbd {
 
 #highlight.off #highlight-groups,
 #highlight.off #highlight-query,
-#highlight.off #walkable-key {
+#highlight.off #walkable-key,
+#highlight.off #walls-key {
 	opacity: 0.5;
 }
 
@@ -971,11 +972,19 @@ kbd {
 	gap: 10px;
 }
 
-#highlight.walkable #walkable-key {
+/* And the invisible walls' (see invisibleWalls.ts). */
+#walls-key {
+	display: none;
+	--slope: #b44dff;
+}
+
+#highlight.walkable #walkable-key,
+#highlight.walls #walls-key {
 	display: flex;
 }
 
-#walkable-key span::before {
+#walkable-key span::before,
+#walls-key span::before {
 	content: '';
 	display: inline-block;
 	width: 8px;

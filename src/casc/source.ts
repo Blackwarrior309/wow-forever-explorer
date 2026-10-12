@@ -32,53 +32,6 @@ export class BlobFile implements RandomAccessFile {
 	}
 }
 
-/** Source backed by the File System Access API (Chromium browsers). */
-export class DirectoryHandleSource implements FileSource {
-	private readonly dirs = new Map<string, Promise<FileSystemDirectoryHandle>>();
-	private readonly files = new Map<string, Promise<RandomAccessFile>>();
-
-	constructor(private readonly root: FileSystemDirectoryHandle) {}
-
-	private dir(path: string[]): Promise<FileSystemDirectoryHandle> {
-		if (path.length === 0) return Promise.resolve(this.root);
-		const key = path.join('/').toLowerCase();
-		let dir = this.dirs.get(key);
-		if (!dir) {
-			dir = this.dir(path.slice(0, -1)).then((parent) => parent.getDirectoryHandle(path[path.length - 1]));
-			dir.catch(() => this.dirs.delete(key));
-			this.dirs.set(key, dir);
-		}
-		return dir;
-	}
-
-	openFile(path: string[]): Promise<RandomAccessFile> {
-		const key = path.join('/').toLowerCase();
-		let file = this.files.get(key);
-		if (!file) {
-			file = (async () => {
-				try {
-					const dir = await this.dir(path.slice(0, -1));
-					const handle = await dir.getFileHandle(path[path.length - 1]);
-					return new BlobFile(await handle.getFile());
-				} catch (e) {
-					if (e instanceof DOMException && e.name === 'NotFoundError') throw new NotFoundError(path);
-					throw e;
-				}
-			})();
-			file.catch(() => this.files.delete(key));
-			this.files.set(key, file);
-		}
-		return file;
-	}
-
-	async listDir(path: string[]): Promise<string[]> {
-		const dir = await this.dir(path);
-		const names: string[] = [];
-		for await (const name of dir.keys()) names.push(name);
-		return names;
-	}
-}
-
 /** Source backed by files from an <input webkitdirectory> pick (works in every browser). */
 export class FileListSource implements FileSource {
 	private readonly files = new Map<string, File>();

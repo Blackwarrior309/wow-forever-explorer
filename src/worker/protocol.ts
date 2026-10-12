@@ -12,7 +12,6 @@ import type { CharacterOutfit, CharacterRace } from '../explorer/spawns';
 import type { Image } from '../formats/blp';
 
 export type SourceInit =
-	| { kind: 'handle'; handle: FileSystemDirectoryHandle }
 	| { kind: 'files'; files: { path: string; file: File }[] }
 	/** The install the portable launcher or dev server found, served at this URL (ending in '/'). */
 	| { kind: 'http'; base: string };

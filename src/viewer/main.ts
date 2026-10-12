@@ -1,4 +1,4 @@
-import { droppedFolderToSource, filesToSource, hasDirectoryPicker, pickDirectory } from '../app/folderPicker';
+import { droppedFolderToSource, filesToSource } from './folderPicker';
 import { createStorageClient } from '../worker/client';
 import type { SourceInit } from '../worker/protocol';
 import type { ProductInfo } from '../casc/config';
@@ -196,13 +196,12 @@ async function useSource(init: SourceInit): Promise<void> {
 function folderProblem(init: SourceInit, error: unknown): string {
 	const reason = error instanceof Error ? error.message : String(error);
 	if (init.kind === 'http') return `World of Warcraft was found but couldn't be read (${reason}). Choose its folder instead.`;
-	if (init.kind === 'handle') return `That folder couldn't be read (${reason}). Choose the folder that contains _classic_ or _classic_beta_ (not that folder itself).`;
 	const hasBuildInfo = init.files.some(({ path }) => path === '.build.info');
 	const dataFiles = init.files.filter(({ path }) => /^data\/data\//i.test(path)).length;
 	const counts = `Got ${init.files.length} files: ${hasBuildInfo ? '.build.info found' : '.build.info missing'}, ${dataFiles} in Data/data.`;
 	if (!hasBuildInfo && dataFiles) {
 		// The browser's folder dialog leaves out hidden files (.build.info) on macOS and Linux.
-		return `${counts} The browser's folder dialog left out .build.info, a hidden file. Drag the folder onto this page instead, or use "Open with direct access" under Help (Chrome or Edge).`;
+		return `${counts} The browser's folder dialog left out .build.info, a hidden file. Drag the folder onto this page instead.`;
 	}
 	return `${counts} That doesn't look like the World of Warcraft folder: choose the one that contains _classic_ or _classic_beta_ (not that folder itself). Reason: ${reason}`;
 }
@@ -274,16 +273,6 @@ $<HTMLInputElement>('pick-input').addEventListener('change', async (event) => {
 	await useSource(source);
 });
 
-if (!hasDirectoryPicker) $('pick-direct').hidden = true;
-$('pick-direct').addEventListener('click', async () => {
-	try {
-		const init = await pickDirectory();
-		if (init) await useSource(init);
-	} catch (e) {
-		setStatus((e as Error).message, true);
-	}
-});
-
 $('explore').addEventListener('click', () => {
 	// After a version that couldn't start, another one starts from a fresh page.
 	if (exploring) switchProduct($<HTMLSelectElement>('product').value);
@@ -341,7 +330,7 @@ async function explore(): Promise<void> {
 	exploring = true;
 	const button = $<HTMLButtonElement>('explore');
 	button.disabled = true;
-	for (const id of ['pick', 'pick-direct']) $<HTMLButtonElement>(id).disabled = true;
+	$<HTMLButtonElement>('pick').disabled = true;
 	try {
 		await storage.open($<HTMLSelectElement>('product').value);
 		const ui = loadUiAssets(storage);
@@ -382,7 +371,7 @@ async function explore(): Promise<void> {
 		perf.log('error', `could not start: ${(e as Error).message}`);
 		setStatus(`Could not start: ${(e as Error).message}`, true);
 		button.disabled = false;
-		for (const id of ['pick', 'pick-direct']) $<HTMLButtonElement>(id).disabled = false;
+		$<HTMLButtonElement>('pick').disabled = false;
 		// A way out of a version that doesn't start, which would otherwise be opened again every time.
 		if (installed.length > 1) $('product-step').hidden = false;
 		try {

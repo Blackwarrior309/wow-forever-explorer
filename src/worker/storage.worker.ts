@@ -1,4 +1,4 @@
-import { FileListSource, DirectoryHandleSource, HttpSource, type FileSource } from '../casc/source';
+import { FileListSource, HttpSource, type FileSource } from '../casc/source';
 import { CascStorage, StorageChangedError } from '../casc/storage';
 import { describeError, MapExplorer } from '../explorer/maps';
 import { setPageUrl } from '../explorer/spawns';
@@ -28,7 +28,7 @@ const api: AsyncStorageApi = {
 		setPageUrl(url);
 	},
 	async setSource(init: SourceInit) {
-		source = init.kind === 'handle' ? new DirectoryHandleSource(init.handle) : init.kind === 'http' ? new HttpSource(init.base) : new FileListSource(init.files);
+		source = init.kind === 'http' ? new HttpSource(init.base) : new FileListSource(init.files);
 		explorer = null;
 		world = null;
 		return CascStorage.listProducts(source);

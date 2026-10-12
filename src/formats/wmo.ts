@@ -249,6 +249,12 @@ export function parseWmoGroup(bytes: Uint8Array): WmoGroup {
 					if (bytes[c.offset + i * 2 + 1] === 0xff && bytes[c.offset + i * 2] & MOPY_COLLISION) group.collisionOnly.push(i);
 				}
 				break;
+			case 'MPY2':
+				// Newer files: two 16-bit values per triangle, flags then material (0xFFFF: collision only).
+				for (let i = 0; i < c.size / 4; i++) {
+					if (view.getUint16(c.offset + i * 4 + 2, true) === 0xffff && view.getUint16(c.offset + i * 4, true) & MOPY_COLLISION) group.collisionOnly.push(i);
+				}
+				break;
 			case 'MOVI': {
 
 				const out = new Uint16Array(c.size / 2);

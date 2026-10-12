@@ -1,4 +1,4 @@
-import { productName, type SessionHost, type SwitchRequest, type ViewerSession } from './session';
+import { KEPT_VERSIONS_KEY, keptVersions, productName, type SessionHost, type SwitchRequest, type ViewerSession } from './session';
 
 /** ms a version may take to open before the switch is given up, the view left as it was. */
 const SWITCH_TIMEOUT = 180_000;
@@ -18,9 +18,10 @@ interface Frame {
 
 /**
  * Quick switching (see session.ts): this page holds the viewers, each a frame of its own with its
- * own worker, world and sound. One is shown; the one switched away from stays loaded out of
- * sight, stopped and silent, so switching back is at once; at most one is kept, as each holds a
- * whole world. A version not kept opens in a hidden frame while the one shown carries on, and
+ * own worker, world and sound. One is shown; those switched away from stay loaded out of sight,
+ * stopped and silent, so switching back is at once: as many as chosen (keptVersions), the one
+ * shown longest ago let go first, as each holds a whole world. A version not kept opens in a
+ * hidden frame while the one shown carries on, and
  * is shown once the ground in view has loaded; if it can't open, or the switch is cancelled or
  * takes too long, the one shown stays. After evaera's switcher in #8.
  */
@@ -38,7 +39,8 @@ export function hostViewers(): void {
 
 	let shown = addFrame();
 	shown.element.classList.add('shown');
-	let kept: Frame | null = null;
+	/** Loaded out of sight, the one shown last first. */
+	let kept: Frame[] = [];
 	let pending: Frame | null = null;
 	let timer = 0;
 	let messageTimer = 0;
@@ -66,6 +68,11 @@ export function hostViewers(): void {
 		banner.hidden = false;
 	}
 
+	/** Lets go of the kept frames past as many as are to be kept, those shown longest ago. */
+	function trimKept(): void {
+		for (const frame of kept.splice(keptVersions())) frame.element.remove();
+	}
+
 	/** Shows the frame a switch is waiting for, at what the one shown shows now, and keeps that one. */
 	async function commit(next: Frame): Promise<void> {
 		const previous = shown;
@@ -86,11 +93,11 @@ export function hostViewers(): void {
 		previous.element.inert = true;
 		next.element.classList.add('shown');
 		next.element.inert = false;
-		if (kept && kept !== next) kept.element.remove();
-		kept = previous;
+		kept = [previous, ...kept.filter((frame) => frame !== next)];
+		trimKept();
 		shown = next;
-		next.session!.activate(keys);
 		next.element.contentWindow?.focus();
+		next.session!.activate(keys);
 		banner.hidden = true;
 	}
 
@@ -100,7 +107,7 @@ export function hostViewers(): void {
 		if (!frame) return;
 		pending = null;
 		clearTimeout(timer);
-		if (frame !== kept) frame.element.remove();
+		if (!kept.includes(frame)) frame.element.remove();
 		say(`${reason} Still showing ${productName(shown.product ?? '')}.`, false);
 		messageTimer = window.setTimeout(() => (banner.hidden = true), MESSAGE_TIME);
 		shown.element.contentWindow?.focus();
@@ -127,9 +134,10 @@ export function hostViewers(): void {
 		switchProduct(child, product, source, state) {
 			if (!isFrame(child, shown) || pending || product === shown.product) return;
 			say(`Opening ${productName(product)}…`, true);
-			if (kept?.product === product && kept.session) {
-				pending = kept;
-				void commit(kept);
+			const loaded = kept.find((frame) => frame.product === product && frame.session);
+			if (loaded) {
+				pending = loaded;
+				void commit(loaded);
 				return;
 			}
 			pending = addFrame({ product, source, state });
@@ -140,6 +148,11 @@ export function hostViewers(): void {
 		},
 	};
 	window.mapExplorerHost = host;
+
+	// Fewer to keep, chosen in a viewer's menu: let go of the rest now.
+	window.addEventListener('storage', (e) => {
+		if (e.key === KEPT_VERSIONS_KEY) trimKept();
+	});
 
 	// A view typed into the address, or Back and Forward: for the viewer shown.
 	window.addEventListener('hashchange', () => {

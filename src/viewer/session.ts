@@ -35,6 +35,29 @@ export function quickSwitching(): boolean {
 	}
 }
 
+/** Where how many versions quick switching keeps is remembered (see keptVersions). */
+export const KEPT_VERSIONS_KEY = 'mapExplorer.quickSwitchKeep';
+/** Most versions quick switching keeps loaded out of sight: each holds a whole world. */
+export const MAX_KEPT = 3;
+
+/** How many versions quick switching keeps loaded out of sight, besides the one shown: 1 to MAX_KEPT. */
+export function keptVersions(): number {
+	try {
+		const n = Number(localStorage.getItem(KEPT_VERSIONS_KEY));
+		return Number.isInteger(n) && n >= 1 ? Math.min(n, MAX_KEPT) : 1;
+	} catch {
+		return 1;
+	}
+}
+
+export function setKeptVersions(n: number): void {
+	try {
+		localStorage.setItem(KEPT_VERSIONS_KEY, String(n));
+	} catch {
+		// Not remembered: one.
+	}
+}
+
 export function setQuickSwitching(on: boolean): void {
 	try {
 		localStorage.setItem(QUICK_KEY, on ? '1' : '0');

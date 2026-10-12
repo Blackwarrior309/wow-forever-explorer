@@ -659,6 +659,10 @@ kbd {
 	min-width: 100%;
 }
 
+.quick-keep {
+	display: block;
+	margin-top: 6px;
+}
 
 #version-list {
 	display: grid;

@@ -24,7 +24,7 @@ import { setVolume, volumeSetting, type VolumeChannel } from './volume';
 import { WorldMap } from './worldMap';
 import { setHeard } from './audioOut';
 import { readEnabled as soundSaved } from './music';
-import { productName, sessionHost, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
+import { keptVersions, productName, sessionHost, setKeptVersions, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const status = $('status');
@@ -440,11 +440,16 @@ function setUpVersions(): void {
 	render();
 	// Turned on or off, the page is made again as it then is (holding viewers or one), where it was.
 	const quick = $<HTMLInputElement>('quick-switch');
+	const keep = $<HTMLSelectElement>('quick-keep');
 	quick.checked = quickSwitching();
+	keep.value = String(keptVersions());
+	keep.disabled = !quick.checked;
 	quick.addEventListener('change', () => {
 		setQuickSwitching(quick.checked);
 		reloadWith(currentState());
 	});
+	// Taken up by the page holding the viewers as it is (see switchHost.ts).
+	keep.addEventListener('change', () => setKeptVersions(Number(keep.value)));
 	// Moved in another viewer of the same page (see Quick switching).
 	window.addEventListener('storage', (e) => {
 		if (e.key === ORDER_KEY) render();

@@ -241,8 +241,9 @@
 			<div class="menu-body panel">
 				<p class="muted small">Opens another version where you are. Ctrl and its number choose it too; drag the handles to change the order.</p>
 				<div id="version-list"></div>
-				<label class="quick-switch" title="Keeps the version you switch away from loaded, out of sight, so switching back and forth is at once and never reloads the page (nor asks for the folder again). Each version kept holds a whole world: more memory."><input type="checkbox" id="quick-switch"> Quick switching</label>
-				<p class="muted small">Keeps the last version loaded, for switching back and forth at once. Uses more memory.</p>
+				<label class="quick-switch" title="Keeps the versions you switch away from loaded, out of sight, so switching back to them is at once and never reloads the page (nor asks for the folder again). Each version kept holds a whole world: more memory."><input type="checkbox" id="quick-switch"> Quick switching</label>
+				<label class="quick-keep" title="The one shown longest ago is let go first">Keep <select id="quick-keep"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select> other versions loaded</label>
+				<p class="muted small">Switching back to a version kept loaded is at once. Each one kept uses about as much memory as the one shown.</p>
 			</div>
 		</details>
 		<details id="goto" name="menu">

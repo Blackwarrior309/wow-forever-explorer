@@ -350,9 +350,10 @@ function setUpVersions(): void {
 		const i = rows.findIndex((row) => y < row.getBoundingClientRect().top + row.offsetHeight / 2);
 		return i < 0 ? { row: rows.at(-1), after: true } : { row: rows[i], after: false };
 	};
-	// The whole list takes the drop, the gaps between rows and the row dragged too: only rows did,
-	// and the cursor said no drop over the rest.
-	list.addEventListener('dragover', (e) => {
+	// The whole menu takes the drop (the gaps between rows, the row dragged and the panel's edges
+	// too): only rows did, and the cursor said no drop over the rest.
+	const panel = $('version');
+	panel.addEventListener('dragover', (e) => {
 		if (!dragged) return;
 		e.preventDefault();
 		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -360,10 +361,10 @@ function setUpVersions(): void {
 		const { row, after } = dropAt(e.clientY);
 		row?.classList.add(after ? 'drop-after' : 'drop-before');
 	});
-	list.addEventListener('dragleave', (e) => {
-		if (!list.contains(e.relatedTarget as Node | null)) clearMarks();
+	panel.addEventListener('dragleave', (e) => {
+		if (!panel.contains(e.relatedTarget as Node | null)) clearMarks();
 	});
-	list.addEventListener('drop', (e) => {
+	panel.addEventListener('drop', (e) => {
 		if (!dragged) return;
 		e.preventDefault();
 		const moving = dragged;

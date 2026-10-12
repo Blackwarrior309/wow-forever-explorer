@@ -234,7 +234,8 @@ export class MusicPlayer {
 	}
 }
 
-function readEnabled(): boolean {
+/** Whether music and sound were last turned on (remembered between visits). */
+export function readEnabled(): boolean {
 	try {
 		// Muted until turned on; after that the choice is remembered.
 		return localStorage.getItem(STORAGE_KEY) === '1';

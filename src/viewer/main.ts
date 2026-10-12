@@ -14,7 +14,7 @@ import { MOUSE_SPEED_MAX, MOUSE_SPEED_MIN } from './look';
 import type { TintMode } from './regionOverlay';
 import { isTyping } from './typing';
 import { loadUiAssets } from './uiAssets';
-import { FIXED_SPEED_DEFAULT, FIXED_SPEED_MAX, FIXED_SPEED_MIN, FLY_SPEED_RANGE, FLY_SPEED_STEP, Viewer, parseResolution, RESOLUTION_MIN, type HudInfo, type MeetingStone, type ViewSettings, type ViewSpot } from './viewer';
+import { FIXED_SPEED_DEFAULT, FIXED_SPEED_MAX, FIXED_SPEED_MIN, FLY_SPEED_RANGE, FLY_SPEED_STEP, Viewer, parseResolution, RESOLUTION_MIN, type HudInfo, type MeetingStone, type ViewSettings } from './viewer';
 import type { CharacterLook } from './character';
 import { FormPicker } from './formPicker';
 import { DEFAULT_EMOTE_KEYS, EMOTES, type Emote } from './emotes';
@@ -22,11 +22,23 @@ import { CHARACTER_OUTFITS, type CharacterOutfit, type CharacterRace } from '../
 
 import { setVolume, volumeSetting, type VolumeChannel } from './volume';
 import { WorldMap } from './worldMap';
+import { setHeard } from './audioOut';
+import { readEnabled as soundSaved } from './music';
+import { productName, sessionHost, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const status = $('status');
 
 const storage = createStorageClient((message) => showProgress(message), () => ($('game-updated').hidden = false));
+
+/** The page holding the viewers, when this is one of them (quick switching; see switchHost.ts). */
+const host = sessionHost();
+/** What the host made this viewer for: a version to open, and what to show. */
+const requested = host?.request(window);
+// Opened out of sight for a switch: silent until shown.
+if (requested) setHeard(false);
+/** The folder in use, for a viewer opening another version of it. */
+let source: SourceInit | null = null;
 $('game-updated-reload').addEventListener('click', () => location.reload());
 
 /** A message under the buttons; errors also end the loading bar, so the buttons come back. */
@@ -61,6 +73,7 @@ const FOLDER_CREEP = [0.42, 20] as const;
 /** Shows the loading bar at a step, in place of the folder buttons. */
 function showProgress(message: string): void {
 	perf.log('load', message);
+	if (requested) host!.progress(window, message);
 	const step = LOADING_STEPS.find(([pattern]) => pattern.test(message));
 	const appearing = $('loading').hidden;
 	$('drop').hidden = true;
@@ -90,25 +103,8 @@ let installed: ProductInfo[] = [];
 /** Set once a game version has been opened: the viewer starts once per page, so another one takes a reload. */
 let exploring = false;
 
-/** What each game version is called, by its product code; others go by their code. */
-const PRODUCT_NAMES: Record<string, string> = {
-	wow_classic_beta: 'Forever',
-	wow_classic_era: 'Classic',
-	wow: 'Retail',
-	wow_classic: 'MoP Classic',
-	wow_anniversary: 'Classic Anniversary',
-	wowt: 'Retail PTR',
-	wowxptr: 'Retail PTR (next patch)',
-	wow_beta: 'Retail Beta',
-	wow_classic_ptr: 'MoP Classic PTR',
-	wow_classic_era_ptr: 'Classic Era PTR',
-};
 /** The Game version menu lists these first, in this order (and so they get Ctrl+1, 2, 3); the rest after. */
 const PRODUCT_ORDER = ['wow_classic_beta', 'wow_classic_era', 'wow'];
-
-function productName(product: string): string {
-	return PRODUCT_NAMES[product] ?? product;
-}
 
 /** Ctrl and the number for the nth version in the menu: 1 to 9, then 0; none past the tenth. */
 function versionKey(index: number): string {
@@ -125,31 +121,54 @@ function savedProduct(): string | null {
 	}
 }
 
-/**
- * What a switch to another game version carries over the reload: exactly what was in view (the
- * URL hash rounds it), on foot or flying, and a time of day moved from the local time.
- */
+/** What a reload carries over (see SwitchState): taken by the page it reloads into. */
 const SWITCH_KEY = 'mapExplorer.switch';
-interface SwitchState {
-	view: ViewSpot | null;
-	time: number | null;
+
+/** Movement keys, carried on held down into the next viewer when switching in place. */
+const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'KeyC', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
+const heldKeys = new Set<string>();
+window.addEventListener('keydown', (e) => {
+	if (MOVE_KEYS.has(e.code) && !isTyping(e)) heldKeys.add(e.code);
+}, true);
+window.addEventListener('keyup', (e) => heldKeys.delete(e.code), true);
+window.addEventListener('blur', () => heldKeys.clear());
+
+/** Exactly what's in view now, the time of day if moved, and the movement keys held. */
+function currentState(): SwitchState {
+	const viewer = infoViewer;
+	return { view: viewer?.viewSpot() ?? null, time: viewer && !viewer.timeIsLocal ? viewer.timeMinutes : null, keys: [...heldKeys] };
 }
 
-/** Remembers a game version and reloads the page into it, showing what's in view now. */
+/**
+ * Remembers a game version and opens it, showing what's in view now: with quick switching, in
+ * another viewer of this page; otherwise by reloading the page into it.
+ */
 function switchProduct(product: string): void {
 	try {
 		localStorage.setItem(PRODUCT_KEY, product);
-		if (infoViewer) {
-			const state: SwitchState = { view: infoViewer.viewSpot(), time: infoViewer.timeIsLocal ? null : infoViewer.timeMinutes };
-			sessionStorage.setItem(SWITCH_KEY, JSON.stringify(state));
-		}
 	} catch {
-		// Not remembered: the reload comes back to the version it was, or starts afresh.
+		// Not remembered: a reload comes back to the version it was.
+	}
+	if (host && source && infoViewer) host.switchProduct(window, product, source, currentState());
+	else reloadWith(currentState());
+}
+
+/** Reloads the whole page (holding viewers or not), to show what's in view now again. */
+function reloadWith(state: SwitchState): void {
+	try {
+		sessionStorage.setItem(SWITCH_KEY, JSON.stringify(state));
+	} catch {
+		// Not remembered: it starts where the address says.
 	}
 	// The hash too, now: it's written only once the view has been still a while, and the reload
 	// takes the address as it is when asked, before the page is gone.
 	infoViewer?.shareLink();
-	location.reload();
+	(window.top ?? window).location.reload();
+}
+
+/** Held down when the viewer before was left: pressed again here, as the keyboard won't say so. */
+function pressKeys(keys: string[]): void {
+	for (const code of keys) if (MOVE_KEYS.has(code)) window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
 }
 
 /** What switchProduct carried over, taken once, so a later reload of the page starts as usual. */
@@ -167,6 +186,7 @@ function takeSwitch(): Partial<SwitchState> {
 async function useSource(init: SourceInit): Promise<void> {
 	showProgress('Reading .build.info');
 	try {
+		source = init;
 		const products = (await storage.setSource(init)).filter((p) => p.product.startsWith('wow'));
 		// Once each: a version can be listed with several builds, and opening it picks the one that can be read.
 		installed = products.filter((p, i) => products.findIndex((q) => q.product === p.product) === i);
@@ -174,7 +194,8 @@ async function useSource(init: SourceInit): Promise<void> {
 		installed.sort((a, b) => rank(a.product) - rank(b.product));
 		const select = $<HTMLSelectElement>('product');
 		select.replaceChildren(...products.map((p) => new Option(`${productName(p.product)} ${p.version}`, p.product)));
-		const saved = savedProduct();
+		if (requested && !products.some((p) => p.product === requested.product)) throw new Error(`${productName(requested.product)} isn't in this folder`);
+		const saved = requested?.product ?? savedProduct();
 		// The version chosen before, if it's still installed. Otherwise prefer a classic build: the continent file IDs are the classic ones.
 		const preferred = products.find((p) => p.product === saved) ?? products.find((p) => p.product === 'wow_classic_beta') ?? products.find((p) => p.product.startsWith('wow_classic'));
 		if (preferred) {
@@ -189,6 +210,7 @@ async function useSource(init: SourceInit): Promise<void> {
 	} catch (e) {
 		console.error('Reading the game folder failed', e);
 		setStatus(folderProblem(init, e), true);
+		if (requested) host!.failed(window, `${productName(requested.product)} couldn't open: ${e instanceof Error ? e.message : String(e)}.`);
 	}
 }
 
@@ -225,7 +247,9 @@ async function findWow(): Promise<void> {
 	$('start').classList.remove('finding');
 	if (found) await useSource({ kind: 'http', base });
 }
-void findWow();
+// A viewer made for a switch opens the folder the one before had.
+if (requested) void useSource(requested.source);
+else void findWow();
 
 // Dropping the folder on the page works like choosing it.
 const drop = $('drop');
@@ -396,6 +420,13 @@ function setUpVersions(): void {
 		}));
 	};
 	render();
+	// Turned on or off, the page is made again as it then is (holding viewers or one), where it was.
+	const quick = $<HTMLInputElement>('quick-switch');
+	quick.checked = quickSwitching();
+	quick.addEventListener('change', () => {
+		setQuickSwitching(quick.checked);
+		reloadWith(currentState());
+	});
 	// Moved in another viewer of the same page (see Quick switching).
 	window.addEventListener('storage', (e) => {
 		if (e.key === ORDER_KEY) render();
@@ -427,14 +458,17 @@ async function explore(): Promise<void> {
 		// For poking at the scene from the console (and test scripts) while developing.
 		if (import.meta.env.DEV) (globalThis as unknown as { mapExplorerViewer: Viewer }).mapExplorerViewer = viewer;
 		viewer.onShotStatus = showShotStatus;
+		viewer.onHash = (hash) => host?.hash(window, hash);
 		// Shadows and the torch are part of what three builds each shader for, and load() builds
 		// those the world will need; set only afterwards, every one was built again while flying.
 		const { stats: _, ...saved } = readSaved<SavedView>(VIEW_KEY);
 		viewer.settings = saved;
 		await viewer.load((text) => showProgress(text));
 		// Switched from another game version: the camera where it was there, before the first frame.
-		const carried = takeSwitch();
-		if (carried.view) await viewer.showSpot(carried.view.camera);
+		const carried = requested?.state ?? takeSwitch();
+		const placed = carried.view ? await viewer.showSpot(carried.view.camera) : true;
+		// Opened in place to show that, it's no use elsewhere: the viewer before stays.
+		if (!placed && requested) throw new Error('that map isn’t in this version');
 		if (typeof carried.time === 'number' && Number.isFinite(carried.time)) viewer.timeMinutes = carried.time;
 		const { minimapArrow } = await ui;
 		showProgress('Starting');
@@ -455,9 +489,18 @@ async function explore(): Promise<void> {
 		setUpHelp();
 		// And on foot, the character where it stood, once its look is set.
 		if (carried.view?.walker) void viewer.walkAt(carried.view.walker).then((problem) => problem && notify(problem));
+		if (host) {
+			// Opened out of sight for a switch: shown once the ground in view has loaded.
+			if (requested) await viewer.firstView;
+			host.ready(window, viewerSession(viewer));
+		}
 	} catch (e) {
 		perf.log('error', `could not start: ${(e as Error).message}`);
 		setStatus(`Could not start: ${(e as Error).message}`, true);
+		if (requested) {
+			host!.failed(window, `${productName(requested.product)} couldn't open: ${(e as Error).message}.`);
+			return;
+		}
 		button.disabled = false;
 		for (const id of ['pick', 'pick-direct']) $<HTMLButtonElement>(id).disabled = false;
 		// A way out of a version that doesn't start, which would otherwise be opened again every time.
@@ -470,7 +513,43 @@ async function explore(): Promise<void> {
 	}
 }
 
+/** This viewer as the page holding the viewers drives it (quick switching; see switchHost.ts). */
+function viewerSession(viewer: Viewer): ViewerSession {
+	return {
+		product: $<HTMLSelectElement>('product').value,
+		state: currentState,
+		async show(state) {
+			// Kept out of sight: the menus may have changed meanwhile in the viewer shown.
+			for (const reread of rereads) reread();
+			if (typeof state.time === 'number' && Number.isFinite(state.time)) viewer.timeMinutes = state.time;
+			else viewer.resetTime();
+			if (!state.view) return;
+			if (viewer.walking && !state.view.walker) viewer.setWalking(false);
+			if (!(await viewer.showSpot(state.view.camera))) throw new Error('that map isn’t in this version');
+			if (state.view.walker) {
+				const problem = await viewer.walkAt(state.view.walker);
+				if (problem) notify(problem);
+			}
+		},
+		pause() {
+			viewer.pause();
+			setHeard(false);
+		},
+		activate(keys) {
+			setHeard(true);
+			viewer.start();
+			pressKeys(keys);
+		},
+	};
+}
+
 // --- Remembered settings ---
+
+/**
+ * Re-read what the menus remember, for a viewer kept out of sight (quick switching) while the
+ * one shown changed it.
+ */
+const rereads: (() => void)[] = [];
 
 function readSaved<T>(key: string): Partial<T> {
 	try {
@@ -715,6 +794,23 @@ function setUpView(viewer: Viewer): void {
 		});
 	}
 	syncResolution();
+
+	// Changed meanwhile by another viewer of the page: only what differs, as each change can
+	// rebuild shaders.
+	rereads.push(() => {
+		const { stats: savedStats = false, ...saved } = readSaved<SavedView>(VIEW_KEY);
+		const current = viewer.settings as unknown as Record<string, unknown>;
+		const changed = Object.fromEntries(Object.entries(saved).filter(([key, value]) => JSON.stringify(current[key]) !== JSON.stringify(value)));
+		if (Object.keys(changed).length) viewer.settings = changed;
+		setStats(savedStats);
+		sync();
+		syncResolution();
+		syncTime();
+		syncSpeed();
+		syncClutterRange();
+		syncDetailRange();
+		syncMouseSpeed();
+	});
 
 	viewer.onChange = (change) => {
 		const s = viewer.settings;
@@ -1381,16 +1477,19 @@ function setUpHighlights(viewer: Viewer): void {
 	const levelOut = $('tint-level-out');
 	const rested = $<HTMLInputElement>('highlight-rested');
 	const boxes = [...panel.querySelectorAll<HTMLInputElement>('#highlight-groups input')];
-	const saved = readSaved<HighlightSettings>(HIGHLIGHT_KEY);
-	on.checked = saved.on ?? false;
-	query.value = saved.query ?? '';
-	walkable.checked = saved.walkable ?? false;
-	walls.checked = saved.walls ?? false;
-	// Saved before the tints came in: the graveyards had a box of their own.
-	tint.value = saved.tint ?? ((saved as { graveyards?: boolean }).graveyards ? 'graveyards' : '');
-	level.value = String(saved.level ?? 20);
-	rested.checked = saved.rested ?? false;
-	for (const box of boxes) box.checked = saved.groups?.includes(box.value as HighlightGroup) ?? false;
+	const load = () => {
+		const saved = readSaved<HighlightSettings>(HIGHLIGHT_KEY);
+		on.checked = saved.on ?? false;
+		query.value = saved.query ?? '';
+		walkable.checked = saved.walkable ?? false;
+		walls.checked = saved.walls ?? false;
+		// Saved before the tints came in: the graveyards had a box of their own.
+		tint.value = saved.tint ?? ((saved as { graveyards?: boolean }).graveyards ? 'graveyards' : '');
+		level.value = String(saved.level ?? 20);
+		rested.checked = saved.rested ?? false;
+		for (const box of boxes) box.checked = saved.groups?.includes(box.value as HighlightGroup) ?? false;
+	};
+	load();
 
 	const apply = () => {
 		const settings: HighlightSettings = {
@@ -1434,6 +1533,10 @@ function setUpHighlights(viewer: Viewer): void {
 		notify(`Highlights ${onOff(on.checked)}`);
 	});
 	apply();
+	rereads.push(() => {
+		load();
+		apply();
+	});
 }
 
 // --- Sound ---
@@ -1458,6 +1561,10 @@ function setUpSound(viewer: Viewer): void {
 			shown.value = `${slider.value}%`;
 		});
 	}
+	rereads.push(() => {
+		if (viewer.soundOn !== null && viewer.soundOn !== soundSaved()) viewer.soundOn = soundSaved();
+		syncSound(viewer);
+	});
 	$('sound-on').addEventListener('change', (e) => {
 		viewer.soundOn = (e.target as HTMLInputElement).checked;
 	});

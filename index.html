@@ -241,6 +241,8 @@
 			<div class="menu-body panel">
 				<p class="muted small">Opens another version where you are. Ctrl and its number choose it too; drag the handles to change the order.</p>
 				<div id="version-list"></div>
+				<label class="quick-switch" title="Keeps the version you switch away from loaded, out of sight, so switching back and forth is at once and never reloads the page (nor asks for the folder again). Each version kept holds a whole world: more memory."><input type="checkbox" id="quick-switch"> Quick switching</label>
+				<p class="muted small">Keeps the last version loaded, for switching back and forth at once. Uses more memory.</p>
 			</div>
 		</details>
 		<details id="goto" name="menu">
@@ -399,6 +401,6 @@
 		</div>
 	</div>
 
-	<script type="module" src="/src/viewer/main.ts"></script>
+	<script type="module" src="/src/viewer/entry.ts"></script>
 </body>
 </html>

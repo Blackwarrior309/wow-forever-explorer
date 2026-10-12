@@ -702,6 +702,9 @@ export class Viewer {
 	readonly firstView: Promise<void>;
 	private readonly showFirstView: () => void;
 
+	/** Called with each view written to the URL hash, for a page this one is shown inside. */
+	onHash: (hash: string) => void = () => {};
+
 	/** Called with a line for the page to show, when something asked for can't be done. */
 	onNotice: (text: string) => void = () => {};
 
@@ -1213,6 +1216,7 @@ export class Viewer {
 		if (!force && now - this.pendingHashSince < 1000) return;
 		this.lastHash = hash;
 		history.replaceState(null, '', hash);
+		this.onHash(hash);
 	}
 
 	/**
@@ -1824,15 +1828,28 @@ export class Viewer {
 		this.camera.updateProjectionMatrix();
 	}
 
+	/** The animation frame asked for, while running. */
+	private frameRequest: number | null = null;
+
+	/** Starts drawing, a frame at a time; again after pause, from where it was. */
 	start(): void {
+		if (this.frameRequest !== null) return;
 		let last = performance.now();
 		const frame = (now: number) => {
 			const dt = Math.min(0.1, (now - last) / 1000);
 			last = now;
 			this.tick(dt, now);
-			requestAnimationFrame(frame);
+			this.frameRequest = requestAnimationFrame(frame);
 		};
-		requestAnimationFrame(frame);
+		this.frameRequest = requestAnimationFrame(frame);
+	}
+
+	/** Stops drawing, the mouse let go: kept loaded out of sight for quick switching. */
+	pause(): void {
+		if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
+		this.frameRequest = null;
+		this.endShot();
+		if (document.pointerLockElement) document.exitPointerLock();
 	}
 
 	private tick(dt: number, now: number): void {

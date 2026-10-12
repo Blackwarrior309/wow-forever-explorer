@@ -1,6 +1,7 @@
 import { parseAdtRoot, TILE_CELLS, TILE_SIZE, tileGrids } from '../formats/adt';
 import { parseAdtTex } from '../formats/adtTex';
 import { blpTexture, decodeBlp, type Image, type TextureData } from '../formats/blp';
+import type { Db2 } from '../formats/db2';
 import type { LiquidKind } from '../formats/mh2o';
 import { parseWdl, WDL_CELLS } from '../formats/wdl';
 import { DB2_FILES, footstepSounds, liquidKinds, liquidLooks, loadTable, lockKinds, type FootstepSounds, type LiquidLooks, type LockKind } from './clientDb';
@@ -59,6 +60,7 @@ export interface MapListing {
 }
 
 /** Map.db2 fields. */
+const MAP_DIRECTORY = 0;
 const MAP_NAME = 1;
 const MAP_INSTANCE_TYPE = 8;
 const MAP_WDT = 21;
@@ -121,13 +123,24 @@ export class WorldLoader {
 
 	private mapIds: Promise<Map<number, number>> | null = null;
 
+	/**
+	 * A map's WDT file (0 if none): from Map.db2, or where that hasn't the field (Classic), by its
+	 * path, world/maps/<directory>/<directory>.wdt, the directory being the map's first field.
+	 */
+	private mapWdt(table: Db2, mapId: number): number {
+		const listed = table.getInt(mapId, MAP_WDT);
+		if (listed !== null) return listed;
+		const directory = table.getString(mapId, MAP_DIRECTORY)?.toLowerCase();
+		return directory ? this.storage.lookupPath(`world/maps/${directory}/${directory}.wdt`) ?? 0 : 0;
+	}
+
 	/** The Map.db2 ID of a map's WDT, or null for a WDT no map uses. */
 	private async mapIdOf(wdtFdid: number): Promise<number | null> {
 		const known = KNOWN_MAPS.find((m) => m.wdt === wdtFdid);
 		if (known) return known.mapId;
 		this.mapIds ??= loadTable(this.storage, DB2_FILES.Map).then((table) => {
 			const byWdt = new Map<number, number>();
-			for (const id of table.ids()) byWdt.set(table.getInt(id, MAP_WDT) ?? 0, id);
+			for (const id of table.ids()) byWdt.set(this.mapWdt(table, id), id);
 			return byWdt;
 		});
 		return (await this.mapIds).get(wdtFdid) ?? null;
@@ -139,7 +152,7 @@ export class WorldLoader {
 	 */
 	async loadInstance(mapId: number): Promise<InstanceMap | null> {
 		const table = await loadTable(this.storage, DB2_FILES.Map);
-		const wdtFdid = table.getInt(mapId, MAP_WDT) ?? 0;
+		const wdtFdid = this.mapWdt(table, mapId);
 		if (!wdtFdid || this.storage.status(wdtFdid) !== 'ok') return null;
 		const wdt = await this.maps.wdt(wdtFdid);
 		const name = table.getString(mapId, MAP_NAME) ?? `Map ${mapId}`;
@@ -168,7 +181,7 @@ export class WorldLoader {
 		const table = await loadTable(this.storage, DB2_FILES.Map);
 		const out: MapListing[] = [];
 		for (const id of table.ids()) {
-			const wdt = table.getInt(id, MAP_WDT) ?? 0;
+			const wdt = this.mapWdt(table, id);
 			if (!wdt || this.storage.status(wdt) !== 'ok') continue;
 			const known = KNOWN_MAPS.find((m) => m.mapId === id);
 			out.push({

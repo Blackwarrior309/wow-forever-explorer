@@ -162,6 +162,26 @@ test('the relationship map supplies each record\'s parent', () => {
 	expect(db.getParent(30)).toBe(700);
 });
 
+test('fields past the end read as missing rather than failing', () => {
+	const db = new Db2(build(recs));
+	expect(db.getInt(10, FIELD_COUNT)).toBeNull();
+	expect(db.getString(20, FIELD_COUNT + 3)).toBeNull();
+	expect(db.arrayLength(FIELD_COUNT)).toBe(0);
+});
+
+test('a field map reads fields by another layout\'s numbers, those it hasn\'t as missing', () => {
+	const db = new Db2(build(recs));
+	// As if the other layout had the string first, then a field this one hasn't, then the int.
+	db.mapFields([0, 3, null, 1]);
+	expect(db.fieldCount).toBe(4);
+	expect(db.getString(20, 1)).toBe('Westfall');
+	expect(db.getInt(20, 2)).toBeNull();
+	expect(db.getFloat(20, 2)).toBeNull();
+	expect(db.arrayLength(2)).toBe(0);
+	expect(db.getInt(20, 3)).toBe(7);
+	expect(db.getInt(20, 5)).toBeNull();
+});
+
 test('rejects other formats and sparse tables', () => {
 	expect(() => new Db2(build(recs, { magic: 'WDC3' }))).toThrow(/Unsupported DB2 format WDC3/);
 	expect(() => new Db2(build(recs, { flags: 1 }))).toThrow(/Sparse/);

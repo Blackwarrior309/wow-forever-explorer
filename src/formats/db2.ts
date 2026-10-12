@@ -53,6 +53,10 @@ export class Db2 {
 	private readonly recordsStart: number[] = [];
 	private readonly stringTables: { start: number; size: number; before: number }[] = [];
 	readonly skippedSections: number;
+	/** Which arrangement of fields this file has: the same table differs between game versions. */
+	readonly layoutHash: number;
+	/** Field numbers as asked for, to this file's own (see mapFields); null for one it hasn't. */
+	private fieldMap: (number | null)[] | null = null;
 
 	constructor(private readonly bytes: Uint8Array) {
 		this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -66,7 +70,8 @@ export class Db2 {
 		const fieldCount = u32();
 		this.recordSize = u32();
 		u32(); // string table size
-		u32(); u32(); // table hash, layout hash
+		u32(); // table hash
+		this.layoutHash = u32();
 		u32(); u32(); // min id, max id
 		u32(); // locale
 		const flags = u16();
@@ -188,13 +193,28 @@ export class Db2 {
 		this.skippedSections = skipped;
 	}
 
-	get fieldCount(): number {
-		return this.fields.length;
+	/**
+	 * Reads field i of the calls below as this file's field map[i], or as missing where that's
+	 * null: the code numbers fields as one game version has them (see db2Layouts.ts).
+	 */
+	mapFields(map: (number | null)[]): void {
+		this.fieldMap = map;
 	}
 
-	/** Number of array elements in a field (1 for scalars). */
+	/** This file's own number for a field asked for, or null if it hasn't that field. */
+	private local(field: number): number | null {
+		const f = this.fieldMap ? (this.fieldMap[field] ?? null) : field;
+		return f !== null && f < this.fields.length ? f : null;
+	}
+
+	get fieldCount(): number {
+		return this.fieldMap?.length ?? this.fields.length;
+	}
+
+	/** Number of array elements in a field (1 for scalars, 0 for a field this file hasn't). */
 	arrayLength(field: number): number {
-		return this.fields[field].arrayCount;
+		const f = this.local(field);
+		return f === null ? 0 : this.fields[f].arrayCount;
 	}
 
 	/** The record's parent ID from the relationship map (e.g. CreatureDisplayInfoOption -> Extra). */
@@ -251,10 +271,11 @@ export class Db2 {
 		}
 	}
 
-	/** Raw 32-bit field value, or null if the row is unknown. */
+	/** Raw 32-bit field value, or null if the row is unknown or the file hasn't the field. */
 	getInt(id: number, field: number, arrayIndex = 0): number | null {
 		const row = this.rows.get(id);
-		return row ? this.fieldValue(row, field, arrayIndex) : null;
+		const f = this.local(field);
+		return row && f !== null ? this.fieldValue(row, f, arrayIndex) : null;
 	}
 
 	getFloat(id: number, field: number, arrayIndex = 0): number | null {
@@ -268,10 +289,11 @@ export class Db2 {
 	/** String fields hold an offset from the field's own position into the string tables. */
 	getString(id: number, field: number, arrayIndex = 0): string | null {
 		const row = this.rows.get(id);
-		if (!row) return null;
-		const f = this.fields[field];
+		const local = this.local(field);
+		if (!row || local === null) return null;
+		const f = this.fields[local];
 		const fieldPos = row.offset + f.offsetBits / 8 + arrayIndex * 4;
-		const target = fieldPos + this.fieldValue(row, field, arrayIndex);
+		const target = fieldPos + this.fieldValue(row, local, arrayIndex);
 		// Offsets are relative to a virtual layout: all records, then all string tables.
 		const recordsSpace = row.index * this.recordSize + (fieldPos - row.offset);
 		const intoStrings = recordsSpace + (target - fieldPos) - this.totalRecords * this.recordSize;

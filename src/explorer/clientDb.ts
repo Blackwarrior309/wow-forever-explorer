@@ -1,5 +1,6 @@
 import type { CascStorage } from '../casc/storage';
 import { Db2 } from '../formats/db2';
+import { fieldMap } from './db2Layouts';
 import type { LiquidKind } from '../formats/mh2o';
 
 /** File IDs of client database tables (DBFilesClient/*.db2); they're unnamed in the root. */
@@ -27,7 +28,10 @@ export const DB2_FILES = {
 
 const tables = new WeakMap<CascStorage, Map<number, Promise<Db2>>>();
 
-/** Loads a table once per storage. Encrypted sections are skipped rather than failing. */
+/**
+ * Loads a table once per storage, its fields numbered as Forever's are (see db2Layouts.ts).
+ * Encrypted sections are skipped rather than failing.
+ */
 export function loadTable(storage: CascStorage, fdid: number): Promise<Db2> {
 	let cache = tables.get(storage);
 	if (!cache) {
@@ -36,7 +40,13 @@ export function loadTable(storage: CascStorage, fdid: number): Promise<Db2> {
 	}
 	let table = cache.get(fdid);
 	if (!table) {
-		table = storage.readFileWithStatus(fdid, true).then(({ data }) => new Db2(data));
+		table = storage.readFileWithStatus(fdid, true).then(({ data }) => {
+			const db = new Db2(data);
+			// Another game version's layout, read with Forever's field numbers.
+			const map = fieldMap(fdid, db.layoutHash);
+			if (map) db.mapFields(map);
+			return db;
+		});
 		cache.set(fdid, table);
 	}
 	return table;

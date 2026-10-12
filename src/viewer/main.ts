@@ -84,6 +84,16 @@ function hideProgress(): void {
 	$('loading-fill').style.width = '0%';
 }
 
+/** Fades the start screen out over the world's first frames, then takes it out of the page. */
+function dismissStart(): void {
+	const start = $('start');
+	start.classList.add('leaving');
+	const gone = () => (start.hidden = true);
+	start.addEventListener('transitionend', gone, { once: true });
+	// Reduced motion, or a tab in the background that doesn't run transitions: gone all the same.
+	setTimeout(gone, 1000);
+}
+
 const PRODUCT_KEY = 'mapExplorer.product';
 /** Every game version in the folder, for the Game version menu. */
 let installed: ProductInfo[] = [];
@@ -350,7 +360,7 @@ async function explore(): Promise<void> {
 		if (typeof carried.time === 'number' && Number.isFinite(carried.time)) viewer.timeMinutes = carried.time;
 		const { minimapArrow } = await ui;
 		showProgress('Starting');
-		$('start').hidden = true;
+		dismissStart();
 		$('menu').hidden = $('top-left').hidden = $('side').hidden = false;
 		setUpView(viewer);
 		viewer.start();

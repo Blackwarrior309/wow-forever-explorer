@@ -13,25 +13,29 @@
 <body>
 	<canvas id="view"></canvas>
 
-	<!-- "finding" until the page knows whether World of Warcraft was found for it. -->
+	<!-- The start screen: choosing the folder and game version, then the loading bar, in one look
+	     from the first click to the world. "finding" until the page knows whether World of Warcraft
+	     was found for it. -->
 	<div id="start" class="finding">
 		<div class="card">
+			<img class="logo" src="/icon.svg" alt="" width="64" height="64">
 			<h1>Map Explorer</h1>
-			<p class="muted">Fly over Azeroth, drawn from the game files on your computer.</p>
+			<p class="tagline">Fly over Azeroth, drawn from the game files on your computer.</p>
 			<div id="drop">
 				<button id="pick" class="primary big">Choose your World of Warcraft folder</button>
-				<div class="muted small">or drag it here · usually <code>C:\Program Files (x86)\World of Warcraft</code></div>
+				<div class="hint">or drag it here · usually <code>C:\Program Files (x86)\World of Warcraft</code></div>
 			</div>
 			<input id="pick-input" type="file" webkitdirectory hidden>
 			<div id="loading" hidden aria-live="polite">
-				<div class="loading-bar"><div id="loading-fill"></div></div>
 				<div id="loading-text"></div>
+				<div class="loading-bar"><div id="loading-fill"></div></div>
 			</div>
 			<div id="product-step" hidden>
 				<label>Game version <select id="product"></select></label>
 				<button id="explore" class="primary">Explore</button>
 			</div>
-			<p id="status" class="muted"></p>
+			<p id="status"></p>
+			<p class="note">The browser calls it an upload, but nothing leaves your computer: the files are only read here.</p>
 		</div>
 	</div>
 

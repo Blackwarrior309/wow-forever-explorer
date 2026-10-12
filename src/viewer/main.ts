@@ -143,16 +143,18 @@ function currentState(): SwitchState {
  * Remembers a game version and opens it, showing what's in view now: with quick switching, in
  * another viewer of this page; otherwise by reloading the page into it.
  */
-function switchProduct(product: string): void {
+function switchProduct(product: string, fromMenu = false): void {
 	try {
 		localStorage.setItem(PRODUCT_KEY, product);
 	} catch {
 		// Not remembered: a reload comes back to the version it was.
 	}
-	// Done with: closed here, so this viewer, kept for quick switching, doesn't come back with it open.
+	// Closed here, so this viewer, kept for quick switching, doesn't come back with it open; the
+	// next one opens it again if the version was chosen in it (see SwitchState.menu).
 	$<HTMLDetailsElement>('version').open = false;
-	if (host && source && infoViewer) host.switchProduct(window, product, source, currentState());
-	else reloadWith(currentState());
+	const state = { ...currentState(), menu: fromMenu };
+	if (host && source && infoViewer) host.switchProduct(window, product, source, state);
+	else reloadWith(state);
 }
 
 /** Reloads the whole page (holding viewers or not), to show what's in view now again. */
@@ -432,7 +434,7 @@ function setUpVersions(): void {
 				button.title = `${p.product}: the version open now`;
 			} else {
 				button.title = p.product;
-				button.addEventListener('click', () => switchProduct(p.product));
+				button.addEventListener('click', () => switchProduct(p.product, true));
 			}
 			row.append(handle, button);
 			return row;
@@ -506,6 +508,8 @@ async function explore(): Promise<void> {
 		void setUpGoTo(viewer);
 		setUpHighlights(viewer);
 		setUpVersions();
+		// Chosen in the menu before: still open, for comparing the next.
+		if (carried.menu) $<HTMLDetailsElement>('version').open = true;
 		setUpTravel(viewer, minimapArrow);
 		setUpWalking(viewer);
 		setUpEmotes(viewer);
@@ -543,6 +547,7 @@ function viewerSession(viewer: Viewer): ViewerSession {
 		product: $<HTMLSelectElement>('product').value,
 		state: currentState,
 		async show(state) {
+			$<HTMLDetailsElement>('version').open = !!state.menu;
 			// Kept out of sight: the menus may have changed meanwhile in the viewer shown.
 			for (const reread of rereads) reread();
 			if (typeof state.time === 'number' && Number.isFinite(state.time)) viewer.timeMinutes = state.time;

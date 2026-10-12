@@ -75,6 +75,8 @@ export interface SwitchState {
 	view: ViewSpot | null;
 	time: number | null;
 	keys?: string[];
+	/** Chosen in the Game version menu (not with a shortcut): the next viewer opens it again. */
+	menu?: boolean;
 	/** The mouse was captured for looking around (switching in place). */
 	captured?: boolean;
 }

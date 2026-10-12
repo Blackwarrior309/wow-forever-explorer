@@ -42,6 +42,8 @@ export function hostViewers(): void {
 	/** Loaded out of sight, the one shown last first. */
 	let kept: Frame[] = [];
 	let pending: Frame | null = null;
+	/** Whether the pending switch was chosen in the Game version menu (see SwitchState.menu). */
+	let pendingMenu = false;
 	let timer = 0;
 	let messageTimer = 0;
 
@@ -77,7 +79,8 @@ export function hostViewers(): void {
 	async function commit(next: Frame): Promise<void> {
 		const previous = shown;
 		try {
-			await next.session!.show(previous.session!.state());
+			// What's in view now, not when the switch was asked for.
+			await next.session!.show({ ...previous.session!.state(), menu: pendingMenu });
 		} catch (e) {
 			// Cancelled meanwhile, perhaps with another switch begun since: that one isn't this one's to end.
 			if (pending === next) giveUp(`${productName(next.product ?? '')} couldn't show this place (${(e as Error).message}).`);
@@ -134,6 +137,7 @@ export function hostViewers(): void {
 		switchProduct(child, product, source, state) {
 			if (!isFrame(child, shown) || pending || product === shown.product) return;
 			say(`Opening ${productName(product)}…`, true);
+			pendingMenu = !!state.menu;
 			const loaded = kept.find((frame) => frame.product === product && frame.session);
 			if (loaded) {
 				pending = loaded;

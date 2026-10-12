@@ -58,6 +58,7 @@
 					<button id="time-now" title="Back to local time (N)">Now</button>
 				</div>
 				<label>Weather <select data-setting="weather"><option value="auto">The zone's own</option><option value="dry">The zone's own, no rain or snow</option><option value="off">Always clear</option><option value="rain">Rain</option><option value="snow">Snow</option><option value="sandstorm">Sandstorm</option></select></label>
+				<label title="The zone, coordinates, time, altitude and music, at the top left"><input type="checkbox" id="area-on"> Area info</label>
 				<label><input type="checkbox" data-setting="minimap"> Show minimap</label>
 				<label><input type="checkbox" data-setting="torch"> Torch <kbd>L</kbd></label>
 				<label><input type="checkbox" data-setting="creatures"> NPCs and monsters</label>
@@ -265,10 +266,12 @@
 
 	<!-- Top left, under the menus: where the camera is. -->
 	<div id="top-left" hidden>
-		<div id="hud">
-			<div id="hud-location"></div>
-			<button id="hud-coords" class="plain muted" title="Copy a link to this view"></button>
-			<dl id="hud-view"></dl>
+		<div id="hud" hidden>
+			<div id="hud-area" hidden>
+				<div id="hud-location"></div>
+				<button id="hud-coords" class="plain muted" title="Copy a link to this view"></button>
+				<dl id="hud-view"></dl>
+			</div>
 			<dl id="hud-stats" hidden></dl>
 		</div>
 	</div>

@@ -667,7 +667,7 @@ function closeMenu(): void {
 // --- The View, Graphics and Camera menus and the HUD ---
 
 const VIEW_KEY = 'mapExplorer.view';
-type SavedView = Partial<ViewSettings> & { stats: boolean };
+type SavedView = Partial<ViewSettings> & { stats: boolean; area: boolean };
 
 /** Called with each HUD update, for the parts of the page that follow the viewer. */
 const hudFollowers: (() => void)[] = [];
@@ -675,11 +675,12 @@ const hudFollowers: (() => void)[] = [];
 /** The View, Graphics and Camera menus: every setting the keys toggle, the time of day and the HUD's stats; remembered between visits. */
 function setUpView(viewer: Viewer): void {
 	const menu = $('menu');
-	const { stats = false, ...settings } = readSaved<SavedView>(VIEW_KEY);
+	const { stats = false, area = false, ...settings } = readSaved<SavedView>(VIEW_KEY);
 	viewer.settings = settings;
 	const statsBox = $<HTMLInputElement>('stats-on');
+	const areaBox = $<HTMLInputElement>('area-on');
 	const controls = [...menu.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-setting]')];
-	const remember = () => save(VIEW_KEY, { ...viewer.settings, stats: statsBox.checked });
+	const remember = () => save(VIEW_KEY, { ...viewer.settings, stats: statsBox.checked, area: areaBox.checked });
 	const sync = () => {
 		const s = viewer.settings;
 		for (const c of controls) {
@@ -688,11 +689,24 @@ function setUpView(viewer: Viewer): void {
 			else c.value = String(value);
 		}
 	};
+	// The HUD's panel shows only while the area info or the stats are on.
+	const syncHud = () => ($('hud').hidden = !statsBox.checked && !areaBox.checked);
 	const setStats = (on: boolean) => {
 		statsBox.checked = on;
 		$('hud-stats').hidden = !on;
+		syncHud();
+	};
+	const setArea = (on: boolean) => {
+		areaBox.checked = on;
+		$('hud-area').hidden = !on;
+		syncHud();
 	};
 	setStats(stats);
+	setArea(area);
+	areaBox.addEventListener('change', () => {
+		setArea(areaBox.checked);
+		remember();
+	});
 	sync();
 	for (const c of controls) {
 		c.addEventListener('change', () => {

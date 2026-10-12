@@ -419,6 +419,13 @@ body:has(#menu details[open]) #hud {
 	border-top: 1px solid var(--line);
 }
 
+/* With the area info off, the stats stand alone. */
+#hud-area[hidden] + #hud-stats {
+	padding-top: 0;
+	margin-top: 0 !important;
+	border-top: none;
+}
+
 /* A button that looks like text. */
 button.plain {
 	background: none;

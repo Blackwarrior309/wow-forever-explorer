@@ -295,6 +295,11 @@ async function explore(): Promise<void> {
 		for (const id of ['pick', 'pick-direct']) $<HTMLButtonElement>(id).disabled = false;
 		// A way out of a version that doesn't start, which would otherwise be opened again every time.
 		if (installed.length > 1) $('product-step').hidden = false;
+		try {
+			localStorage.removeItem(PRODUCT_KEY);
+		} catch {
+			// Storage blocked: nothing was remembered either.
+		}
 	}
 }
 

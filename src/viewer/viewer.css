@@ -293,10 +293,6 @@ body:has(#menu details[open]) #hud {
 }
 
 #hud {
-	visibility: hidden;
-}
-
-#hud {
 	background: var(--panel);
 	border-radius: 6px;
 	padding: 8px 12px;

@@ -75,6 +75,8 @@ export interface SwitchState {
 	view: ViewSpot | null;
 	time: number | null;
 	keys?: string[];
+	/** The mouse was captured for looking around (switching in place). */
+	captured?: boolean;
 }
 
 /** What the host asks of a viewer frame it made for a switch. */
@@ -91,10 +93,10 @@ export interface ViewerSession {
 	state(): SwitchState;
 	/** Moves to what another viewer showed (one kept loaded, brought back). */
 	show(state: SwitchState): Promise<void>;
-	/** Out of sight: stops drawing and sound, lets go of the mouse. */
-	pause(): void;
-	/** Shown: draws and is heard again, the movement keys still held carried on. */
-	activate(keys: string[]): void;
+	/** Out of sight: stops drawing and sound, lets go of the mouse; settled once the mouse is free. */
+	pause(): Promise<void>;
+	/** Shown: draws and is heard again, the movement keys still held carried on, the mouse captured again if it was. */
+	activate(keys: string[], captured: boolean): void;
 }
 
 /** The page holding the viewer frames (see switchHost.ts), as a frame reaches it. */

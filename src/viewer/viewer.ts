@@ -710,6 +710,19 @@ export class Viewer {
 	/** Called with a line for the page to show, when something asked for can't be done. */
 	onNotice: (text: string) => void = () => {};
 
+	/** Whether the mouse is captured for looking around while flying. */
+	get mouseCaptured(): boolean {
+		return !this.walker.active && this.controls.locked;
+	}
+
+	/**
+	 * Captures the mouse for looking around while flying, as a click on the view does. The
+	 * browser allows it only shortly after a click or key press, and leaves it uncaptured otherwise.
+	 */
+	captureMouse(): void {
+		if (!this.walker.active) this.controls.lock();
+	}
+
 	/** Whether the camera follows a character on foot rather than flying. */
 	get walking(): boolean {
 		return this.walker.active;

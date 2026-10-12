@@ -87,8 +87,8 @@ export function hostViewers(): void {
 		pending = null;
 		clearTimeout(timer);
 		// Now, not when the switch began: a key let go meanwhile isn't held any more.
-		const { keys = [] } = previous.session!.state();
-		previous.session!.pause();
+		const { keys = [], captured = false } = previous.session!.state();
+		await previous.session!.pause();
 		previous.element.classList.remove('shown');
 		previous.element.inert = true;
 		next.element.classList.add('shown');
@@ -97,7 +97,7 @@ export function hostViewers(): void {
 		trimKept();
 		shown = next;
 		next.element.contentWindow?.focus();
-		next.session!.activate(keys);
+		next.session!.activate(keys, captured);
 		banner.hidden = true;
 	}
 

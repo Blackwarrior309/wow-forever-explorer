@@ -133,10 +133,10 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => heldKeys.delete(e.code), true);
 window.addEventListener('blur', () => heldKeys.clear());
 
-/** Exactly what's in view now, the time of day if moved, and the movement keys held. */
+/** Exactly what's in view now, the time of day if moved, the movement keys held and whether the mouse is captured. */
 function currentState(): SwitchState {
 	const viewer = infoViewer;
-	return { view: viewer?.viewSpot() ?? null, time: viewer && !viewer.timeIsLocal ? viewer.timeMinutes : null, keys: [...heldKeys] };
+	return { view: viewer?.viewSpot() ?? null, time: viewer && !viewer.timeIsLocal ? viewer.timeMinutes : null, keys: [...heldKeys], captured: viewer?.mouseCaptured ?? false };
 }
 
 /**
@@ -555,13 +555,23 @@ function viewerSession(viewer: Viewer): ViewerSession {
 			}
 		},
 		pause() {
+			// The next viewer can capture the mouse only once this one has let go of it.
+			const released = viewer.mouseCaptured
+				? new Promise<void>((resolve) => {
+					document.addEventListener('pointerlockchange', () => resolve(), { once: true });
+					setTimeout(resolve, 250);
+				})
+				: Promise.resolve();
 			viewer.pause();
 			setHeard(false);
+			return released;
 		},
-		activate(keys) {
+		activate(keys, captured) {
 			setHeard(true);
 			viewer.start();
 			pressKeys(keys);
+			// Allowed by the key press that asked for the switch, if that was only moments ago.
+			if (captured) viewer.captureMouse();
 		},
 	};
 }

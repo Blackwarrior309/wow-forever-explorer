@@ -79,6 +79,33 @@ function glowToAlpha(image: Image): Image {
 	return { ...image, rgba };
 }
 
+/**
+ * Classic's minimap border ends its zone bar at x 226 and has a square of its own after it, to
+ * 255 (where the game put the button that hides the minimap); later ones run the bar on to 255.
+ * Joins the two by carrying a column from the bar's middle over the divider and the square's left
+ * side, so the bar's own right end comes from the square's. Pictures without a square are kept.
+ */
+export function joinMinimapZoneBar(image: Image): Image {
+	const { width, rgba } = image;
+	if (width !== 256 || image.height !== 256) return image;
+	const MIDDLE = 200;
+	const [from, to] = [222, 241];
+	// Above the ring, which starts below row 32.
+	const ROWS = 32;
+	const at = (x: number, y: number) => (y * width + x) * 4;
+	const brightness = (i: number) => rgba[i] + rgba[i + 1] + rgba[i + 2];
+	// Down the bar's middle row, a divider stands out from the bar's plain inside.
+	const middle = brightness(at(MIDDLE, 14));
+	let divided = false;
+	for (let x = from; x <= to; x++) if (Math.abs(brightness(at(x, 14)) - middle) > 60) divided = true;
+	if (!divided) return image;
+	const out = new Uint8Array(rgba);
+	for (let y = 0; y < ROWS; y++) {
+		for (let x = from; x <= to; x++) out.set(rgba.subarray(at(MIDDLE, y), at(MIDDLE, y) + 4), at(x, y));
+	}
+	return { ...image, rgba: out };
+}
+
 function toCanvas(image: Image): HTMLCanvasElement {
 	const canvas = document.createElement('canvas');
 	canvas.width = image.width;
@@ -130,7 +157,8 @@ async function loadFonts(storage: AsyncStorageApi): Promise<void> {
 
 /** A picture, shaped, as an object URL to set as a --wow-* variable. */
 async function toUrl(image: Image, [name, path, how]: [string, string, Shape]): Promise<string> {
-	const canvas = shape(toCanvas(GLOWS.has(name) ? glowToAlpha(image) : image), how);
+	const fixed = name === 'minimap-border' ? joinMinimapZoneBar(image) : image;
+	const canvas = shape(toCanvas(GLOWS.has(name) ? glowToAlpha(fixed) : fixed), how);
 	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 	if (!blob) throw new Error(`could not encode ${path}`);
 	return URL.createObjectURL(blob);

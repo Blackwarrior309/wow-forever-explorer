@@ -627,7 +627,7 @@ export async function loadWmo(storage: CascStorage, fdid: number, kindOf: (type:
 	const indexArray = new Uint32Array(indices);
 	return {
 		fdid, positions, normals, uvs, baked, indices: indexArray, bvh: indexArray.length ? buildBvh(positions, indexArray) : undefined, batches, radius: boundingRadius(positions), height: topOf(positions), doodadSets,
-		liquids: buildWmoLiquids(groups, kindOf),
+		liquids: buildWmoLiquids(groups, (root.flags & WMO_LIQUID_TYPE_IDS) !== 0, kindOf),
 		areas: {
 			wmoId: root.wmoId,
 			groups: groups.flatMap((g) => (g ? [{ id: g.groupId, interior: !!(g.flags & WMO_GROUP_INTERIOR), min: g.min, max: g.max }] : [])),
@@ -709,9 +709,16 @@ function mergeBatches(batches: ModelBatch[]): ModelBatch[] {
 }
 
 const LEGACY_LIQUIDS: LiquidKind[] = ['water', 'ocean', 'magma', 'slime'];
+/** MOHD flag: the groups' liquid values are LiquidType IDs, not legacy types. */
+const WMO_LIQUID_TYPE_IDS = 0x4;
+/** A legacy group liquid that leaves the kind to the tile flags (not LiquidType 15, Green Lava). */
+const LEGACY_LIQUID_FROM_TILES = 15;
 
-/** Liquid surfaces (MLIQ) of a WMO's groups, merged per kind, in WMO space. */
-function buildWmoLiquids(groups: (WmoGroup | null)[], kindOf: (type: number) => LiquidKind): LiquidMesh[] {
+/**
+ * Liquid surfaces (MLIQ) of a WMO's groups, merged per kind, in WMO space. typeIds: the groups'
+ * liquid values are LiquidType IDs; in older files (Classic's) they're legacy types.
+ */
+function buildWmoLiquids(groups: (WmoGroup | null)[], typeIds: boolean, kindOf: (type: number) => LiquidKind): LiquidMesh[] {
 	const byKind = new Map<LiquidKind, { type: number; positions: number[]; indices: number[] }>();
 	for (const g of groups) {
 		const l = g?.liquid;
@@ -720,13 +727,15 @@ function buildWmoLiquids(groups: (WmoGroup | null)[], kindOf: (type: number) => 
 			for (let tx = 0; tx < l.xTiles; tx++) {
 				const flags = l.tiles[ty * l.xTiles + tx];
 				if ((flags & 0x0f) === 0x0f) continue;
-				// The group names a LiquidType (legacy types 1-20 share those IDs); without one,
-				// older files keep a legacy type in the tile flags.
-				let kind = g.liquidType ? kindOf(g.liquidType) : LEGACY_LIQUIDS[flags & 3];
+				// The group names a LiquidType, or in older files a legacy type cycling water, ocean,
+				// magma and slime from 1; without one (or with 15), the tile flags hold the legacy type.
+				const fromTiles = !g.liquidType || (!typeIds && g.liquidType === LEGACY_LIQUID_FROM_TILES);
+				const legacy = fromTiles ? flags & 3 : (g.liquidType - 1) & 3;
+				let kind = typeIds && !fromTiles ? kindOf(g.liquidType) : LEGACY_LIQUIDS[legacy];
 				// WMO "ocean" isn't at sea level; draw it as water.
 				if (kind === 'ocean') kind = 'water';
-				// Legacy types 0-3 in the flags are LiquidType IDs 1-4.
-				const mesh = byKind.get(kind) ?? { type: g.liquidType || (flags & 3) + 1, positions: [], indices: [] };
+				// Legacy types 0-3 are LiquidType IDs 1-4.
+				const mesh = byKind.get(kind) ?? { type: typeIds && !fromTiles ? g.liquidType : legacy + 1, positions: [], indices: [] };
 				byKind.set(kind, mesh);
 				const base = mesh.positions.length / 3;
 				for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {

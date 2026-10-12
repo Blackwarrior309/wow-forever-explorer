@@ -333,7 +333,6 @@ function setUpVersions(): void {
 	const current = $<HTMLSelectElement>('product').value;
 	const list = $('version-list');
 	$('version').hidden = installed.length < 2;
-	let dragged: string | null = null;
 	const move = (product: string, target: string, after: boolean) => {
 		const order = versionOrder().map((p) => p.product).filter((id) => id !== product);
 		order.splice(order.indexOf(target) + Number(after), 0, product);
@@ -350,29 +349,40 @@ function setUpVersions(): void {
 		const i = rows.findIndex((row) => y < row.getBoundingClientRect().top + row.offsetHeight / 2);
 		return i < 0 ? { row: rows.at(-1), after: true } : { row: rows[i], after: false };
 	};
-	// The whole menu takes the drop (the gaps between rows, the row dragged and the panel's edges
-	// too): only rows did, and the cursor said no drop over the rest.
-	const panel = $('version');
-	panel.addEventListener('dragover', (e) => {
-		if (!dragged) return;
-		e.preventDefault();
-		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-		clearMarks();
-		const { row, after } = dropAt(e.clientY);
-		row?.classList.add(after ? 'drop-after' : 'drop-before');
-	});
-	panel.addEventListener('dragleave', (e) => {
-		if (!panel.contains(e.relatedTarget as Node | null)) clearMarks();
-	});
-	panel.addEventListener('drop', (e) => {
-		if (!dragged) return;
-		e.preventDefault();
-		const moving = dragged;
-		dragged = null;
-		const { row, after } = dropAt(e.clientY);
-		if (row?.dataset.product && row.dataset.product !== moving) move(moving, row.dataset.product, after);
-		else render();
-	});
+	/**
+	 * Dragging a row by its handle: followed with the pointer itself rather than the browser's drag
+	 * and drop, which Firefox left unfinished from these buttons (the drop never came) and which
+	 * showed a no-drop cursor between rows. Let go, the row goes to the gap marked.
+	 */
+	const dragFrom = (handle: HTMLElement, row: HTMLElement, product: string, down: PointerEvent) => {
+		down.preventDefault();
+		// Kept for the arrow keys, as a click would.
+		handle.focus();
+		handle.setPointerCapture(down.pointerId);
+		let target: ReturnType<typeof dropAt> | null = null;
+		const follow = (e: PointerEvent) => {
+			// Not for a press that stays put: that's a click, to use the arrow keys.
+			if (!target && Math.abs(e.clientY - down.clientY) < 4) return;
+			row.classList.add('dragging');
+			document.body.classList.add('reordering');
+			clearMarks();
+			target = dropAt(e.clientY);
+			target.row?.classList.add(target.after ? 'drop-after' : 'drop-before');
+		};
+		const end = (e: PointerEvent) => {
+			handle.removeEventListener('pointermove', follow);
+			handle.removeEventListener('pointerup', end);
+			handle.removeEventListener('pointercancel', end);
+			row.classList.remove('dragging');
+			document.body.classList.remove('reordering');
+			clearMarks();
+			const to = target?.row?.dataset.product;
+			if (e.type === 'pointerup' && target && to && to !== product) move(product, to, target.after);
+		};
+		handle.addEventListener('pointermove', follow);
+		handle.addEventListener('pointerup', end);
+		handle.addEventListener('pointercancel', end);
+	};
 	const render = () => {
 		const order = versionOrder();
 		list.replaceChildren(...order.map((p, i) => {
@@ -382,7 +392,6 @@ function setUpVersions(): void {
 			const handle = document.createElement('button');
 			handle.className = 'version-handle';
 			handle.textContent = '☰';
-			handle.draggable = true;
 			handle.title = 'Drag, or the arrow keys, to move it: the order sets the Ctrl+number keys';
 			handle.setAttribute('aria-label', `Move ${productName(p.product)}`);
 			handle.addEventListener('keydown', (e) => {
@@ -392,18 +401,8 @@ function setUpVersions(): void {
 				const target = order[i + (e.code === 'ArrowUp' ? -1 : 1)];
 				if (target) move(p.product, target.product, e.code === 'ArrowDown');
 			});
-			handle.addEventListener('dragstart', (e) => {
-				dragged = p.product;
-				if (e.dataTransfer) {
-					e.dataTransfer.effectAllowed = 'move';
-					e.dataTransfer.setData('text/plain', p.product);
-				}
-				row.classList.add('dragging');
-			});
-			handle.addEventListener('dragend', () => {
-				dragged = null;
-				row.classList.remove('dragging');
-				clearMarks();
+			handle.addEventListener('pointerdown', (e) => {
+				if (e.button === 0) dragFrom(handle, row, p.product, e);
 			});
 			const button = document.createElement('button');
 			button.className = 'version-choice';

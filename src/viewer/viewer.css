@@ -704,8 +704,15 @@ kbd {
 	border: 0;
 }
 
-:is(.wow-ui, body) #version-list .version-handle:active {
-	cursor: grabbing;
+:is(.wow-ui, body) #version-list .version-handle {
+	touch-action: none;
+}
+
+/* While a row is dragged by its handle, wherever the pointer is. */
+:is(.wow-ui, body) #version-list .version-handle:active,
+body.reordering,
+body.reordering * {
+	cursor: grabbing !important;
 }
 
 :is(.wow-ui, body) #version-list .version-choice {

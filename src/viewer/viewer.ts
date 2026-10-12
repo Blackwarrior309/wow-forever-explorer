@@ -259,6 +259,16 @@ export const FIXED_SPEED_DEFAULT = 64;
 /** A setting, or the time of day or the sound, changed by its key; or walking started or stopped. */
 export type ViewChange = keyof ViewSettings | 'time' | 'sound' | 'flight' | 'voyage' | 'walking';
 
+/** Where the walking character stands: its map, the feet in that map's own tiles (x, z) and yards (y), and which way it faces. */
+export interface WalkingSpot {
+	mapId: number;
+	x: number;
+	y: number;
+	z: number;
+	facing: number;
+	pitch: number;
+}
+
 /** Where the camera is for the minimap: a map's tile grid, in fractional local tiles. */
 export interface MinimapView {
 	mapId: number;
@@ -693,6 +703,38 @@ export class Viewer {
 		this.controls.enabled = false;
 		// Dropped from where the camera was, falling to the ground.
 		this.walker.dropFrom(cam, this.controls.yaw);
+		this.walker.start();
+		void this.dressCharacter();
+		this.onChange('walking');
+		return null;
+	}
+
+	/**
+	 * Where the walking character stands, in its map's own tiles (as in the URL hash, but exact and
+	 * at the feet), to be put back there by walkAt; null when flying or off every map.
+	 */
+	walkingSpot(): WalkingSpot | null {
+		if (!this.walker.active) return null;
+		const p = this.walker.position;
+		const at = this.terrain.locate(p.x, p.z);
+		if (!at) return null;
+		const c = at.continent;
+		return { mapId: c.mapId, x: p.x / TILE_SIZE - c.offsetX, y: p.y, z: p.z / TILE_SIZE - c.offsetY, facing: this.walker.facing, pitch: this.walker.pitch };
+	}
+
+	/**
+	 * Puts the character back on foot at a spot from walkingSpot: another game version lays the
+	 * dungeons out elsewhere, so it's found by its map. Returns why it can't, or null.
+	 */
+	async walkAt(spot: WalkingSpot): Promise<string | null> {
+		const c = await this.placementFor(spot.mapId);
+		if (!c) return 'That map isn’t in this game version: flying instead';
+		const feet = new THREE.Vector3((spot.x + c.offsetX) * TILE_SIZE, spot.y, (spot.z + c.offsetY) * TILE_SIZE);
+		if (![feet.x, feet.y, feet.z, spot.facing, spot.pitch].every(Number.isFinite)) return null;
+		this.controls.endRide(false);
+		this.controls.enabled = false;
+		// Stands on what's under the feet once it has loaded, as on the floor it was on.
+		this.walker.place(feet, spot.facing, spot.pitch);
 		this.walker.start();
 		void this.dressCharacter();
 		this.onChange('walking');

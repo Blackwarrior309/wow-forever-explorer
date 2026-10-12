@@ -14,7 +14,7 @@ import { MOUSE_SPEED_MAX, MOUSE_SPEED_MIN } from './look';
 import type { TintMode } from './regionOverlay';
 import { isTyping } from './typing';
 import { loadUiAssets } from './uiAssets';
-import { FIXED_SPEED_DEFAULT, FIXED_SPEED_MAX, FIXED_SPEED_MIN, FLY_SPEED_RANGE, FLY_SPEED_STEP, Viewer, parseResolution, RESOLUTION_MIN, type HudInfo, type MeetingStone, type ViewSettings } from './viewer';
+import { FIXED_SPEED_DEFAULT, FIXED_SPEED_MAX, FIXED_SPEED_MIN, FLY_SPEED_RANGE, FLY_SPEED_STEP, Viewer, parseResolution, RESOLUTION_MIN, type HudInfo, type MeetingStone, type ViewSettings, type WalkingSpot } from './viewer';
 import type { CharacterLook } from './character';
 import { FormPicker } from './formPicker';
 import { DEFAULT_EMOTE_KEYS, EMOTES, type Emote } from './emotes';
@@ -100,14 +100,44 @@ function savedProduct(): string | null {
 	}
 }
 
-/** Remembers a game version and reloads the page into it. */
+/**
+ * What a switch to another game version carries over the reload, besides the camera (the URL
+ * hash): the character on foot where it stood, and a time of day moved from the local time.
+ */
+const SWITCH_KEY = 'mapExplorer.switch';
+interface SwitchState {
+	walking: WalkingSpot | null;
+	time: number | null;
+}
+
+/** Remembers a game version and reloads the page into it, where it was. */
 function switchProduct(product: string): void {
 	try {
 		localStorage.setItem(PRODUCT_KEY, product);
+		if (infoViewer) {
+			const state: SwitchState = { walking: infoViewer.walkingSpot(), time: infoViewer.timeIsLocal ? null : infoViewer.timeMinutes };
+			sessionStorage.setItem(SWITCH_KEY, JSON.stringify(state));
+		}
 	} catch {
-		// Not remembered: the reload comes back to the version it was.
+		// Not remembered: the reload comes back to the version it was, or starts afresh.
 	}
 	location.reload();
+}
+
+/** Puts back what switchProduct carried over, once; walking where it can, else flying as the hash left it. */
+async function restoreSwitch(viewer: Viewer): Promise<void> {
+	let state: Partial<SwitchState> = {};
+	try {
+		state = JSON.parse(sessionStorage.getItem(SWITCH_KEY) ?? '{}') ?? {};
+		sessionStorage.removeItem(SWITCH_KEY);
+	} catch {
+		// Storage blocked or unreadable: nothing carried over.
+	}
+	if (typeof state.time === 'number' && Number.isFinite(state.time)) viewer.timeMinutes = state.time;
+	if (state.walking) {
+		const problem = await viewer.walkAt(state.walking);
+		if (problem) notify(problem);
+	}
 }
 
 async function useSource(init: SourceInit): Promise<void> {
@@ -288,6 +318,7 @@ async function explore(): Promise<void> {
 		setUpEmotes(viewer);
 		setUpSound(viewer);
 		setUpHelp();
+		void restoreSwitch(viewer);
 	} catch (e) {
 		perf.log('error', `could not start: ${(e as Error).message}`);
 		setStatus(`Could not start: ${(e as Error).message}`, true);

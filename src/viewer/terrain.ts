@@ -477,9 +477,18 @@ export class TerrainManager {
 		return n;
 	}
 
+	/** Whether every tile close enough for full detail at the last update has it (or couldn't). */
+	get nearShown(): boolean {
+		for (const t of this.tiles.values()) {
+			if (t.hasAdt && t.distance < NEAR_LOAD_DISTANCE && !t.near && !t.nearFailed) return false;
+		}
+		return true;
+	}
+
 	/** Chooses which tiles need full detail, loading nearest first and dropping distant ones. */
 	update(camera: THREE.Vector3): void {
 		const wanted: TileState[] = [];
+		const levels: TileState[] = [];
 		for (const t of this.tiles.values()) {
 			const objectsOnly = !t.far;
 			if (!t.hasAdt && !objectsOnly) continue;
@@ -493,9 +502,14 @@ export class TerrainManager {
 			const level: ObjectLevel = detailed ? 'all' : t.distance < WMO_DISTANCE || held ? 'wmo' : 'none';
 			if (level !== t.objectLevel) {
 				t.objectLevel = level;
-				const offset = new THREE.Vector3(t.continent.offsetX * TILE_SIZE, 0, t.continent.offsetY * TILE_SIZE);
-				this.objects.setTileLevel(TerrainManager.objectKey(t), t.continent.wdt, t.x, t.y, offset, level);
+				levels.push(t);
 			}
+		}
+		// Nearest first: their objects are read in the order asked for (see THROTTLED in client.ts).
+		levels.sort((a, b) => a.distance - b.distance);
+		for (const t of levels) {
+			const offset = new THREE.Vector3(t.continent.offsetX * TILE_SIZE, 0, t.continent.offsetY * TILE_SIZE);
+			this.objects.setTileLevel(TerrainManager.objectKey(t), t.continent.wdt, t.x, t.y, offset, t.objectLevel);
 		}
 		wanted.sort((a, b) => a.distance - b.distance);
 		for (const t of wanted) {

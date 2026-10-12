@@ -141,6 +141,8 @@ const PICK_DISTANCE = 400;
 const TORCH_COLOR = 0xffa650;
 /** Where the light is carried, in camera space (x right, y up, z back): as if from a torch held on the right. */
 const TORCH_POSITION = new THREE.Vector3(0.35, 0, -1.13);
+/** The longest the reads that wait for the first full-detail view (see Viewer.firstView) wait (ms). */
+const FIRST_VIEW_WAIT = 4000;
 /** Yards; the light fades to nothing at this distance. */
 const TORCH_RANGE = 45;
 /** Candela-like units: about full daylight brightness at 10 yards. */
@@ -537,6 +539,9 @@ export class Viewer {
 		private readonly onSelect: (info: SpawnInfo) => void = () => {},
 		plateContainer: HTMLElement | null = null,
 	) {
+		let show = () => {};
+		this.firstView = new Promise((resolve) => (show = resolve));
+		this.showFirstView = show;
 		this.highlights = plateContainer ? new Highlights(plateContainer, storage.loadLockKinds()) : null;
 		this.regionOverlay = plateContainer ? new RegionOverlay(plateContainer, (x, z) => this.terrain?.surfaceAt(x, z) ?? -Infinity) : null;
 		this.restedAreas = plateContainer ? new RestedAreas(plateContainer) : null;
@@ -687,6 +692,15 @@ export class Viewer {
 
 	/** Called when a key changes a setting, the time or the sound, for the page to show and remember. */
 	onChange: (change: ViewChange) => void = () => {};
+
+	/**
+	 * Settles once the ground around the camera has first been shown in full detail, or after
+	 * FIRST_VIEW_WAIT. Reads that can wait (music, footsteps, liquid frames, the character's races,
+	 * the places) wait for it: the storage worker has one thread, and each of them took it for a
+	 * third to half a second, while the ground in view waited behind them.
+	 */
+	readonly firstView: Promise<void>;
+	private readonly showFirstView: () => void;
 
 	/** Called with a line for the page to show, when something asked for can't be done. */
 	onNotice: (text: string) => void = () => {};
@@ -1086,18 +1100,20 @@ export class Viewer {
 			console.warn('Lighting unavailable, using defaults:', e);
 		}
 		// The liquids' animation frames; until they're read, liquids are drawn without them.
-		for (const [name, book] of Object.entries(flipbooks)) {
-			this.storage.loadTextures(book.ids, this.usesCompressedTextures).then(
-				(frames) => book.setFrames(frames.every((f) => f.texture) ? frames.map((f) => createTexture(f.texture!, anisotropy, true)) : []),
-				(e) => console.warn(`${name} textures unavailable:`, e),
-			);
-		}
+		void this.firstView.then(() => {
+			for (const [name, book] of Object.entries(flipbooks)) {
+				this.storage.loadTextures(book.ids, this.usesCompressedTextures).then(
+					(frames) => book.setFrames(frames.every((f) => f.texture) ? frames.map((f) => createTexture(f.texture!, anisotropy, true)) : []),
+					(e) => console.warn(`${name} textures unavailable:`, e),
+				);
+			}
+		});
 		this.storage.loadLiquidLooks().then((looks) => {
 			this.liquidLooks = looks;
 			setLiquidLooks(looks);
 		}, (e) => console.warn('Liquid types unavailable:', e));
 		// Music starts once its tables are read; the world needn't wait for it.
-		this.storage.loadMusic().then(
+		void this.firstView.then(() => this.storage.loadMusic()).then(
 			(data) => {
 				this.music = new MusicPlayer(this.storage, data);
 				this.underwaterAudio = new UnderwaterAudio(this.music);
@@ -1108,6 +1124,8 @@ export class Viewer {
 			},
 			(e) => console.warn('Music unavailable:', e),
 		);
+		// Not waited for long if the ground takes its time (a slow disk, a map with none).
+		setTimeout(this.showFirstView, FIRST_VIEW_WAIT);
 
 		// ?time=HH:MM starts at that time of day.
 		const time = /^(\d{1,2}):(\d{2})$/.exec(new URLSearchParams(location.search).get('time') ?? '');
@@ -1867,6 +1885,7 @@ export class Viewer {
 		if (now - this.lastLodUpdate > 200) {
 			this.lastLodUpdate = now;
 			perf.time('lod.update', () => this.terrain.update(pos));
+			if (this.terrain.nearShown) this.showFirstView();
 		}
 		// Before the objects, so the transports' new places are drawn this frame.
 		this.transports?.update(Date.now(), pos);

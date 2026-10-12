@@ -951,7 +951,8 @@ function setUpWalking(viewer: Viewer): void {
 		show();
 		void viewer.setLook(look);
 	};
-	viewer.characterRaces().then((list) => {
+	// Not needed for the first view (see Viewer.firstView).
+	viewer.firstView.then(() => viewer.characterRaces()).then((list) => {
 		races = list;
 		picker.setRaces(list);
 		race.replaceChildren(...list.map((r) => new Option(r.name, String(r.race))));
@@ -1166,7 +1167,7 @@ async function setUpGoTo(viewer: Viewer): Promise<void> {
 			console.warn('Map list unavailable:', e);
 			return [];
 		}),
-		storage.loadPlaces().catch((e): Place[] => {
+		viewer.firstView.then(() => storage.loadPlaces()).catch((e): Place[] => {
 			console.warn('Zones and towns unavailable:', e);
 			return [];
 		}),

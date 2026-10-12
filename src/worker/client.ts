@@ -34,12 +34,32 @@ export function createStorageClient(onProgress: (message: string) => void, onCha
 		}
 	};
 
-	const call = (method: keyof StorageApi, args: unknown[]) =>
+	const send = (method: keyof StorageApi, args: unknown[]) =>
 		new Promise((resolve, reject) => {
 			const id = nextId++;
 			pending.set(id, { resolve, reject, method, args: describeArgs(args), start: performance.now() });
 			worker.postMessage({ id, method, args } satisfies Request);
 		});
+
+	// Calls held back (see THROTTLED), in the order they were made, and how many of each are in the worker.
+	const held = new Map<keyof StorageApi, (() => void)[]>();
+	const running = new Map<keyof StorageApi, number>();
+	const call = (method: keyof StorageApi, args: unknown[]): Promise<unknown> => {
+		const limit = THROTTLED[method];
+		if (!limit) return send(method, args);
+		return new Promise((resolve, reject) => {
+			const queue = held.get(method) ?? [];
+			held.set(method, queue);
+			queue.push(() => {
+				running.set(method, (running.get(method) ?? 0) + 1);
+				send(method, args).then(resolve, reject).finally(() => {
+					running.set(method, running.get(method)! - 1);
+					queue.shift()?.();
+				});
+			});
+			if ((running.get(method) ?? 0) < limit) queue.shift()!();
+		});
+	};
 
 	// Sent first; the worker handles messages in order.
 	void call('setPageUrl', [location.href]);
@@ -47,6 +67,16 @@ export function createStorageClient(onProgress: (message: string) => void, onCha
 		get: (_, method: string) => (...args: unknown[]) => call(method as keyof StorageApi, args),
 	});
 }
+
+/**
+ * Calls asked for many at once that are kept to a few in the worker at a time, the rest sent as
+ * those finish, in the order asked. The worker works on everything it has been sent together,
+ * so the objects of the hundred-odd tiles in view (asked for as the world opens) held up the
+ * detailed ground under the camera by a second or more; held back, that goes ahead of them.
+ */
+const THROTTLED: Partial<Record<keyof StorageApi, number>> = {
+	loadTileObjects: 4,
+};
 
 /** A storage call's arguments, short: numbers and short strings as they are, lists by length. */
 function describeArgs(args: unknown[]): string {

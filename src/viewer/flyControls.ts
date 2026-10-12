@@ -145,7 +145,8 @@ export class FlyControls {
 		// Raw mouse movement skips the OS pointer acceleration, which is also where the spurious
 		// jumps come from; fall back to the plain lock where it isn't supported.
 		const request = (this.element.requestPointerLock as (options?: { unadjustedMovement?: boolean }) => Promise<void> | void).call(this.element, { unadjustedMovement: true });
-		if (request instanceof Promise) request.catch(() => this.element.requestPointerLock());
+		// Refused again (no click to allow it, say): left uncaptured.
+		if (request instanceof Promise) request.catch(() => (this.element.requestPointerLock() as Promise<void> | undefined)?.catch(() => {}));
 	}
 
 	get locked(): boolean {

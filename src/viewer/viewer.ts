@@ -186,6 +186,8 @@ export interface HudInfo {
 	voyage: string;
 	/** Whether walls, floors and the ground stop the camera (G toggles). */
 	collision: string;
+	/** What's still loading around the camera, or null when nothing is. */
+	loading: string | null;
 }
 
 /** What can be switched from the keyboard or the menus. */
@@ -702,8 +704,24 @@ export class Viewer {
 	readonly firstView: Promise<void>;
 	private readonly showFirstView: () => void;
 
+	/** Called with each view written to the URL hash, for a page this one is shown inside. */
+	onHash: (hash: string) => void = () => {};
+
 	/** Called with a line for the page to show, when something asked for can't be done. */
 	onNotice: (text: string) => void = () => {};
+
+	/** Whether the mouse is captured for looking around while flying. */
+	get mouseCaptured(): boolean {
+		return !this.walker.active && this.controls.locked;
+	}
+
+	/**
+	 * Captures the mouse for looking around while flying, as a click on the view does. The
+	 * browser allows it only shortly after a click or key press, and leaves it uncaptured otherwise.
+	 */
+	captureMouse(): void {
+		if (!this.walker.active) this.controls.lock();
+	}
 
 	/** Whether the camera follows a character on foot rather than flying. */
 	get walking(): boolean {
@@ -1213,6 +1231,7 @@ export class Viewer {
 		if (!force && now - this.pendingHashSince < 1000) return;
 		this.lastHash = hash;
 		history.replaceState(null, '', hash);
+		this.onHash(hash);
 	}
 
 	/**
@@ -1824,15 +1843,28 @@ export class Viewer {
 		this.camera.updateProjectionMatrix();
 	}
 
+	/** The animation frame asked for, while running. */
+	private frameRequest: number | null = null;
+
+	/** Starts drawing, a frame at a time; again after pause, from where it was. */
 	start(): void {
+		if (this.frameRequest !== null) return;
 		let last = performance.now();
 		const frame = (now: number) => {
 			const dt = Math.min(0.1, (now - last) / 1000);
 			last = now;
 			this.tick(dt, now);
-			requestAnimationFrame(frame);
+			this.frameRequest = requestAnimationFrame(frame);
 		};
-		requestAnimationFrame(frame);
+		this.frameRequest = requestAnimationFrame(frame);
+	}
+
+	/** Stops drawing, the mouse let go: kept loaded out of sight for quick switching. */
+	pause(): void {
+		if (this.frameRequest !== null) cancelAnimationFrame(this.frameRequest);
+		this.frameRequest = null;
+		this.endShot();
+		if (document.pointerLockElement) document.exitPointerLock();
 	}
 
 	private tick(dt: number, now: number): void {
@@ -2354,6 +2386,17 @@ export class Viewer {
 		return { zone: area.name, subzone: subzone !== area.name ? subzone : null };
 	}
 
+	/** What's still loading around the camera, for the page to show: null once nothing is. */
+	private loadingText(): string | null {
+		const parts: string[] = [];
+		if (!this.terrain.nearShown) parts.push('ground');
+		const objects = this.objects.pending;
+		if (objects) parts.push(`${objects} object${objects === 1 ? '' : 's'}`);
+		const [done, total] = this.terrain.farTextureProgress;
+		if (done < total) parts.push(`distant land ${Math.floor((done / total) * 100)}%`);
+		return parts.length ? `Loading ${parts.join(' · ')}` : null;
+	}
+
 	private hudInfo(): HudInfo {
 		const pos = this.camera.position;
 		const at = this.terrain.locate(pos.x, pos.z);
@@ -2381,6 +2424,7 @@ export class Viewer {
 			near: `${stats.nearTiles} detailed${stats.nearLoading ? `, ${stats.nearLoading} loading` : ''} · ${stats.layerTextures} layer textures`,
 			objects: (() => { const o = this.objects.stats(); return `${o.drawn.toLocaleString()} of ${o.instances.toLocaleString()} drawn · ${o.models} models${o.loading ? `, ${o.loading} loading` : ''}`; })(),
 			textures: texLoaded < texTotal ? `${texLoaded} / ${texTotal}` : `${texTotal}`,
+			loading: this.loadingText(),
 			time: (() => { const t = this.timeOfDay(); return `${String(Math.floor(t / 120)).padStart(2, '0')}:${String(Math.floor(t / 2) % 60).padStart(2, '0')}`; })(),
 			...this.zoneNames(),
 			side: this.side === 'alliance' ? 'Alliance' : 'Horde',

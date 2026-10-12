@@ -12,8 +12,15 @@ try {
 	// No Web Audio: element volumes only.
 }
 
+/** Whether this page may be heard: a viewer kept loaded out of sight isn't (see setHeard). */
+let heard = true;
+/** Every sound playing, so it can be silenced with the page. */
+const playing = new Set<HTMLAudioElement>();
+
 // The browser keeps the context suspended until the page is clicked or a key is pressed.
-const resume = () => void context?.resume();
+const resume = () => {
+	if (heard) void context?.resume();
+};
 window.addEventListener('pointerdown', resume);
 window.addEventListener('keydown', resume);
 
@@ -44,6 +51,17 @@ function route(audio: HTMLAudioElement, output: AudioNode | undefined): void {
 	});
 }
 
+/**
+ * Lets the page be heard or silences it, sounds that play on their own (before the context
+ * runs) too: off for a viewer loading or kept out of sight for quick switching.
+ */
+export function setHeard(on: boolean): void {
+	heard = on;
+	for (const audio of playing) audio.muted = !on;
+	if (on) resume();
+	else void context?.suspend();
+}
+
 /** The shared context, or null without Web Audio. */
 export function audioContext(): AudioContext | null {
 	return context;
@@ -57,6 +75,11 @@ export function audioContext(): AudioContext | null {
 export function newAudio(url: string, output?: AudioNode): HTMLAudioElement {
 	const audio = new Audio(url);
 	audio.volume = 0;
+	audio.muted = !heard;
+	playing.add(audio);
+	audio.addEventListener('ended', () => {
+		if (!audio.loop) playing.delete(audio);
+	});
 	if (context?.state === 'running') route(audio, output);
 	else if (context) waiting.set(audio, output);
 	return audio;
@@ -77,4 +100,5 @@ export function stopAudio(audio: HTMLAudioElement): void {
 	audio.removeAttribute('src');
 	gains.get(audio)?.disconnect();
 	waiting.delete(audio);
+	playing.delete(audio);
 }

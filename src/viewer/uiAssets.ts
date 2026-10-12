@@ -13,8 +13,6 @@ type Shape =
 	| { kind: 'whole' }
 	/** Part of the picture: a texture's used corner, as the game's texcoords pick it. */
 	| { kind: 'crop'; x: number; y: number; w: number; h: number }
-	/** Stretched to its real shape: loading screens are wide pictures squeezed into a square texture. */
-	| { kind: 'resize'; w: number; h: number }
 	/**
 	 * A backdrop edge strip (the game's edgeFile): eight square cells in a row, left, right,
 	 * top, bottom, then the four corners; the top and bottom are stored stood on end. Laid out
@@ -45,10 +43,6 @@ const IMAGES: [name: string, path: string, shape: Shape][] = [
 	['zoom-out-up', 'interface/minimap/ui-minimap-zoomoutbutton-up.blp', { kind: 'whole' }],
 	['zoom-out-down', 'interface/minimap/ui-minimap-zoomoutbutton-down.blp', { kind: 'whole' }],
 	['zoom-highlight', 'interface/minimap/ui-minimap-zoombutton-highlight.blp', { kind: 'whole' }],
-	['loading-border', 'interface/glues/loadingbar/loading-barborder.blp', { kind: 'whole' }],
-	['loading-fill', 'interface/glues/loadingbar/loading-barfill.blp', { kind: 'whole' }],
-	// One of the original continent loading screens, in their widescreen (16:10) cut.
-	['loading-screen', `interface/glues/loadingscreens/loadscreen${Math.random() < 0.5 ? 'easternkingdom' : 'kalimdor'}wide.blp`, { kind: 'resize', w: 1600, h: 1000 }],
 ];
 
 /**
@@ -97,13 +91,6 @@ function shape(source: HTMLCanvasElement, how: Shape): HTMLCanvasElement {
 	if (how.kind === 'whole') return source;
 	const canvas = document.createElement('canvas');
 	const ctx = canvas.getContext('2d')!;
-	if (how.kind === 'resize') {
-		canvas.width = how.w;
-		canvas.height = how.h;
-		ctx.imageSmoothingQuality = 'high';
-		ctx.drawImage(source, 0, 0, how.w, how.h);
-		return canvas;
-	}
 	if (how.kind === 'crop') {
 		canvas.width = how.w;
 		canvas.height = how.h;
@@ -144,9 +131,7 @@ async function loadFonts(storage: AsyncStorageApi): Promise<void> {
 /** A picture, shaped, as an object URL to set as a --wow-* variable. */
 async function toUrl(image: Image, [name, path, how]: [string, string, Shape]): Promise<string> {
 	const canvas = shape(toCanvas(GLOWS.has(name) ? glowToAlpha(image) : image), how);
-	// Photos as JPEG: far quicker to encode than PNG at this size.
-	const type = how.kind === 'resize' ? 'image/jpeg' : 'image/png';
-	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.9));
+	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 	if (!blob) throw new Error(`could not encode ${path}`);
 	return URL.createObjectURL(blob);
 }

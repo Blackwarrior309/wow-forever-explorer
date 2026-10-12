@@ -1770,6 +1770,9 @@ function showHud(info: HudInfo): void {
 		...(info.voyage ? [['Aboard', info.voyage] as [string, string]] : []),
 	]);
 	$('flight-status').textContent = info.flight || info.voyage;
+	const loading = $('loading-status');
+	loading.hidden = !info.loading;
+	if (info.loading) loading.textContent = info.loading;
 	if (!$('hud-stats').hidden) {
 		fillList('hud-stats', [
 			['Speed', `${info.speed.toFixed(0)} yd/s`],

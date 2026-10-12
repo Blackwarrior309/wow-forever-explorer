@@ -186,6 +186,8 @@ export interface HudInfo {
 	voyage: string;
 	/** Whether walls, floors and the ground stop the camera (G toggles). */
 	collision: string;
+	/** What's still loading around the camera, or null when nothing is. */
+	loading: string | null;
 }
 
 /** What can be switched from the keyboard or the menus. */
@@ -2371,6 +2373,17 @@ export class Viewer {
 		return { zone: area.name, subzone: subzone !== area.name ? subzone : null };
 	}
 
+	/** What's still loading around the camera, for the page to show: null once nothing is. */
+	private loadingText(): string | null {
+		const parts: string[] = [];
+		if (!this.terrain.nearShown) parts.push('ground');
+		const objects = this.objects.pending;
+		if (objects) parts.push(`${objects} object${objects === 1 ? '' : 's'}`);
+		const [done, total] = this.terrain.farTextureProgress;
+		if (done < total) parts.push(`distant land ${Math.floor((done / total) * 100)}%`);
+		return parts.length ? `Loading ${parts.join(' · ')}` : null;
+	}
+
 	private hudInfo(): HudInfo {
 		const pos = this.camera.position;
 		const at = this.terrain.locate(pos.x, pos.z);
@@ -2398,6 +2411,7 @@ export class Viewer {
 			near: `${stats.nearTiles} detailed${stats.nearLoading ? `, ${stats.nearLoading} loading` : ''} · ${stats.layerTextures} layer textures`,
 			objects: (() => { const o = this.objects.stats(); return `${o.drawn.toLocaleString()} of ${o.instances.toLocaleString()} drawn · ${o.models} models${o.loading ? `, ${o.loading} loading` : ''}`; })(),
 			textures: texLoaded < texTotal ? `${texLoaded} / ${texTotal}` : `${texTotal}`,
+			loading: this.loadingText(),
 			time: (() => { const t = this.timeOfDay(); return `${String(Math.floor(t / 120)).padStart(2, '0')}:${String(Math.floor(t / 2) % 60).padStart(2, '0')}`; })(),
 			...this.zoneNames(),
 			side: this.side === 'alliance' ? 'Alliance' : 'Horde',

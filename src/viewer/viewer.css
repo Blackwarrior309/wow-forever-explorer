@@ -776,6 +776,42 @@ kbd {
 	margin-left: 12px;
 }
 
+/* What's still loading, at the top in the middle, under the menus; gone once all has. */
+#loading-status {
+	position: fixed;
+	z-index: 5;
+	top: 34px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 12px;
+	font-size: 12px;
+	color: var(--text);
+	background: var(--panel);
+	border-radius: 12px;
+	pointer-events: none;
+}
+
+#loading-status[hidden] {
+	display: none;
+}
+
+#loading-status::before {
+	content: '';
+	width: 10px;
+	height: 10px;
+	border: 2px solid var(--accent);
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: loading-spin 0.8s linear infinite;
+}
+
+@keyframes loading-spin {
+	to { transform: rotate(360deg); }
+}
+
 /* Go to: the last menu, at the right, its panel a search box with the matches under it. */
 #goto {
 	margin-left: auto;
@@ -952,7 +988,7 @@ kbd {
 }
 
 /* Alt+Z or U: only the world. */
-.ui-hidden :is(#menu, #top-left, #help, #side, #zone-banner, #crosshair, #nameplates) {
+.ui-hidden :is(#menu, #top-left, #help, #side, #zone-banner, #crosshair, #nameplates, #loading-status) {
 	display: none !important;
 }
 

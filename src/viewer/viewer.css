@@ -651,7 +651,7 @@ kbd {
 	min-width: 240px;
 }
 
-/* Its name with the build under it, and its Ctrl+number at the right. */
+/* Its name with the build after it, and its Ctrl+number at the right. */
 #version-list button {
 	display: flex;
 	align-items: center;
@@ -664,9 +664,8 @@ kbd {
 }
 
 .version-name small {
-	display: block;
-	margin-top: 2px;
-	font-size: 10px;
+	margin-left: 6px;
+	font-size: 11px;
 	opacity: 0.7;
 }
 

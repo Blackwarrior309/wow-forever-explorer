@@ -58,12 +58,12 @@ const LOADING_STEPS: [RegExp, number, string][] = [
 /** Where the bar creeps to while the folder is read, and how long that takes (s). */
 const FOLDER_CREEP = [0.42, 20] as const;
 
-/** Shows the loading bar at a step, in place of the folder buttons. */
+/** Shows the loading bar at a step, over the folder button (kept in the layout, so the card doesn't change size). */
 function showProgress(message: string): void {
 	perf.log('load', message);
 	const step = LOADING_STEPS.find(([pattern]) => pattern.test(message));
 	const appearing = $('loading').hidden;
-	$('drop').hidden = true;
+	$('start').classList.add('loading');
 	$('loading').hidden = false;
 	// A bar that was hidden has no width to animate from until it's laid out once.
 	if (appearing) void $('loading-fill').offsetWidth;
@@ -80,7 +80,7 @@ function showProgress(message: string): void {
 
 function hideProgress(): void {
 	$('loading').hidden = true;
-	$('drop').hidden = false;
+	$('start').classList.remove('loading');
 	$('loading-fill').style.width = '0%';
 }
 

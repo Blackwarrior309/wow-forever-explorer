@@ -144,6 +144,19 @@ button:disabled {
 	color: var(--muted);
 }
 
+/* The drop zone and the loading bar share one cell: the zone sets its size, the bar sits over it while loading. */
+.step {
+	display: grid;
+}
+
+.step > * {
+	grid-area: 1 / 1;
+}
+
+#start.loading #drop {
+	visibility: hidden;
+}
+
 #drop {
 	display: grid;
 	justify-items: center;
@@ -236,8 +249,8 @@ button:disabled {
 
 #loading {
 	display: grid;
+	align-self: center;
 	gap: 12px;
-	padding: 28px 0 10px;
 }
 
 #loading-text {
@@ -315,7 +328,7 @@ button:disabled {
 }
 
 /* Nothing to choose until it's known whether the game was found on its own. */
-#start.finding :is(#drop, .note) {
+#start.finding :is(.step, .note) {
 	visibility: hidden;
 }
 

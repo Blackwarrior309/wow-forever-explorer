@@ -44,9 +44,6 @@ const api: AsyncStorageApi = {
 	async loadMap(wdtFdid) {
 		return requireExplorer().loadMap(wdtFdid);
 	},
-	async loadTile(wdtFdid, x, y) {
-		return requireExplorer().loadTile(wdtFdid, x, y);
-	},
 	async minimapThumbnails(wdtFdid, coords, size) {
 		return requireExplorer().minimapThumbnails(wdtFdid, coords, size);
 	},

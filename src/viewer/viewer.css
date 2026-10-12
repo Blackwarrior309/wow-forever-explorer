@@ -644,9 +644,21 @@ kbd {
  * The Game version menu: a row per installed version, a handle at the left to move it and the
  * rest choosing it; the open one marked and lit. After evaera's design in #8.
  */
+/*
+ * As wide as the longest row, between these: a name too long even then is cut short with an
+ * ellipsis, never the shortcut beside it. The notes don't widen it, only wrap to it.
+ */
 #version .menu-body {
-	width: 300px;
+	width: max-content;
+	min-width: 300px;
+	max-width: min(460px, calc(100vw - 32px));
 }
+
+#version .menu-body > p {
+	width: 0;
+	min-width: 100%;
+}
+
 
 #version-list {
 	display: grid;
@@ -694,6 +706,7 @@ kbd {
 
 :is(.wow-ui, body) #version-list .version-choice {
 	flex: 1;
+	min-width: 0;
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -720,18 +733,24 @@ kbd {
 
 .version-name {
 	flex: 1;
+	min-width: 0;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* The build on a line of its own, so names don't wrap or get cut off. */
 .version-name small {
 	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	margin-top: 2px;
 	font-size: 10px;
 	color: #b8afa1;
 }
 
 #version-list kbd {
+	flex-shrink: 0;
 	white-space: nowrap;
 }
 

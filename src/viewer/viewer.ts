@@ -259,14 +259,26 @@ export const FIXED_SPEED_DEFAULT = 64;
 /** A setting, or the time of day or the sound, changed by its key; or walking started or stopped. */
 export type ViewChange = keyof ViewSettings | 'time' | 'sound' | 'flight' | 'voyage' | 'walking';
 
-/** Where the walking character stands: its map, the feet in that map's own tiles (x, z) and yards (y), and which way it faces. */
-export interface WalkingSpot {
+/**
+ * A point and a direction in one map's own frame, the same in every game version though each
+ * lays the dungeons out elsewhere: x and z in the map's tiles, y in yards, yaw and pitch in radians.
+ */
+export interface MapSpot {
 	mapId: number;
 	x: number;
 	y: number;
 	z: number;
-	facing: number;
+	yaw: number;
 	pitch: number;
+}
+
+/**
+ * What's in view, to show again exactly after a switch of game version: the camera, and on
+ * foot, the character (yaw: which way it faces) with the camera's turn and zoom around it.
+ */
+export interface ViewSpot {
+	camera: MapSpot;
+	walker: (MapSpot & { orbit: number; zoom: number }) | null;
 }
 
 /** Where the camera is for the minimap: a map's tile grid, in fractional local tiles. */
@@ -709,32 +721,52 @@ export class Viewer {
 		return null;
 	}
 
-	/**
-	 * Where the walking character stands, in its map's own tiles (as in the URL hash, but exact and
-	 * at the feet), to be put back there by walkAt; null when flying or off every map.
-	 */
-	walkingSpot(): WalkingSpot | null {
-		if (!this.walker.active) return null;
-		const p = this.walker.position;
+	/** A world position and direction in its map's own frame (see MapSpot); null off every map. */
+	private mapSpot(p: THREE.Vector3, yaw: number, pitch: number): MapSpot | null {
 		const at = this.terrain.locate(p.x, p.z);
 		if (!at) return null;
 		const c = at.continent;
-		return { mapId: c.mapId, x: p.x / TILE_SIZE - c.offsetX, y: p.y, z: p.z / TILE_SIZE - c.offsetY, facing: this.walker.facing, pitch: this.walker.pitch };
+		return { mapId: c.mapId, x: p.x / TILE_SIZE - c.offsetX, y: p.y, z: p.z / TILE_SIZE - c.offsetY, yaw, pitch };
+	}
+
+	/** Where a MapSpot is in this world, its map laid out first if it wasn't; null if this game version hasn't the map. */
+	private async fromMapSpot(spot: MapSpot): Promise<THREE.Vector3 | null> {
+		if (![spot.x, spot.y, spot.z, spot.yaw, spot.pitch].every(Number.isFinite)) return null;
+		const c = await this.placementFor(spot.mapId);
+		return c ? new THREE.Vector3((spot.x + c.offsetX) * TILE_SIZE, spot.y, (spot.z + c.offsetY) * TILE_SIZE) : null;
 	}
 
 	/**
-	 * Puts the character back on foot at a spot from walkingSpot: another game version lays the
-	 * dungeons out elsewhere, so it's found by its map. Returns why it can't, or null.
+	 * Exactly what's in view (the URL hash rounds it, and gives the height above the ground,
+	 * which another version can have elsewhere), for showSpot and walkAt; null off every map.
 	 */
-	async walkAt(spot: WalkingSpot): Promise<string | null> {
-		const c = await this.placementFor(spot.mapId);
-		if (!c) return 'That map isn’t in this game version: flying instead';
-		const feet = new THREE.Vector3((spot.x + c.offsetX) * TILE_SIZE, spot.y, (spot.z + c.offsetY) * TILE_SIZE);
-		if (![feet.x, feet.y, feet.z, spot.facing, spot.pitch].every(Number.isFinite)) return null;
+	viewSpot(): ViewSpot | null {
+		const camera = this.mapSpot(this.camera.position, this.controls.yaw, this.controls.pitch);
+		if (!camera) return null;
+		const feet = this.walker.active ? this.mapSpot(this.walker.position, this.walker.facing, this.walker.pitch) : null;
+		return { camera, walker: feet && { ...feet, ...this.walker.aim } };
+	}
+
+	/** Puts the free camera where a viewSpot's camera was; false if this game version hasn't its map. */
+	async showSpot(spot: MapSpot): Promise<boolean> {
+		const position = await this.fromMapSpot(spot);
+		if (!position) return false;
+		this.controls.set(position, spot.yaw, spot.pitch);
+		return true;
+	}
+
+	/**
+	 * Puts the character back on foot where a viewSpot had it, the camera turned and zoomed as it
+	 * was. Returns why it can't, or null.
+	 */
+	async walkAt(spot: NonNullable<ViewSpot['walker']>): Promise<string | null> {
+		const feet = await this.fromMapSpot(spot);
+		if (!feet) return 'That map isn’t in this game version: flying instead';
 		this.controls.endRide(false);
 		this.controls.enabled = false;
 		// Stands on what's under the feet once it has loaded, as on the floor it was on.
-		this.walker.place(feet, spot.facing, spot.pitch);
+		this.walker.place(feet, spot.yaw, spot.pitch);
+		this.walker.aim = spot;
 		this.walker.start();
 		void this.dressCharacter();
 		this.onChange('walking');

@@ -14,7 +14,7 @@ import { MOUSE_SPEED_MAX, MOUSE_SPEED_MIN } from './look';
 import type { TintMode } from './regionOverlay';
 import { isTyping } from './typing';
 import { loadUiAssets } from './uiAssets';
-import { FIXED_SPEED_DEFAULT, FIXED_SPEED_MAX, FIXED_SPEED_MIN, FLY_SPEED_RANGE, FLY_SPEED_STEP, Viewer, parseResolution, RESOLUTION_MIN, type HudInfo, type MeetingStone, type ViewSettings, type WalkingSpot } from './viewer';
+import { FIXED_SPEED_DEFAULT, FIXED_SPEED_MAX, FIXED_SPEED_MIN, FLY_SPEED_RANGE, FLY_SPEED_STEP, Viewer, parseResolution, RESOLUTION_MIN, type HudInfo, type MeetingStone, type ViewSettings, type ViewSpot } from './viewer';
 import type { CharacterLook } from './character';
 import { FormPicker } from './formPicker';
 import { DEFAULT_EMOTE_KEYS, EMOTES, type Emote } from './emotes';
@@ -126,42 +126,41 @@ function savedProduct(): string | null {
 }
 
 /**
- * What a switch to another game version carries over the reload, besides the camera (the URL
- * hash): the character on foot where it stood, and a time of day moved from the local time.
+ * What a switch to another game version carries over the reload: exactly what was in view (the
+ * URL hash rounds it), on foot or flying, and a time of day moved from the local time.
  */
 const SWITCH_KEY = 'mapExplorer.switch';
 interface SwitchState {
-	walking: WalkingSpot | null;
+	view: ViewSpot | null;
 	time: number | null;
 }
 
-/** Remembers a game version and reloads the page into it, where it was. */
+/** Remembers a game version and reloads the page into it, showing what's in view now. */
 function switchProduct(product: string): void {
 	try {
 		localStorage.setItem(PRODUCT_KEY, product);
 		if (infoViewer) {
-			const state: SwitchState = { walking: infoViewer.walkingSpot(), time: infoViewer.timeIsLocal ? null : infoViewer.timeMinutes };
+			const state: SwitchState = { view: infoViewer.viewSpot(), time: infoViewer.timeIsLocal ? null : infoViewer.timeMinutes };
 			sessionStorage.setItem(SWITCH_KEY, JSON.stringify(state));
 		}
 	} catch {
 		// Not remembered: the reload comes back to the version it was, or starts afresh.
 	}
+	// The hash too, now: it's written only once the view has been still a while, and the reload
+	// takes the address as it is when asked, before the page is gone.
+	infoViewer?.shareLink();
 	location.reload();
 }
 
-/** Puts back what switchProduct carried over, once; walking where it can, else flying as the hash left it. */
-async function restoreSwitch(viewer: Viewer): Promise<void> {
-	let state: Partial<SwitchState> = {};
+/** What switchProduct carried over, taken once, so a later reload of the page starts as usual. */
+function takeSwitch(): Partial<SwitchState> {
 	try {
-		state = JSON.parse(sessionStorage.getItem(SWITCH_KEY) ?? '{}') ?? {};
+		const state = JSON.parse(sessionStorage.getItem(SWITCH_KEY) ?? '{}') ?? {};
 		sessionStorage.removeItem(SWITCH_KEY);
+		return state;
 	} catch {
 		// Storage blocked or unreadable: nothing carried over.
-	}
-	if (typeof state.time === 'number' && Number.isFinite(state.time)) viewer.timeMinutes = state.time;
-	if (state.walking) {
-		const problem = await viewer.walkAt(state.walking);
-		if (problem) notify(problem);
+		return {};
 	}
 }
 
@@ -356,6 +355,10 @@ async function explore(): Promise<void> {
 		const { stats: _, ...saved } = readSaved<SavedView>(VIEW_KEY);
 		viewer.settings = saved;
 		await viewer.load((text) => showProgress(text));
+		// Switched from another game version: the camera where it was there, before the first frame.
+		const carried = takeSwitch();
+		if (carried.view) await viewer.showSpot(carried.view.camera);
+		if (typeof carried.time === 'number' && Number.isFinite(carried.time)) viewer.timeMinutes = carried.time;
 		const { minimapArrow } = await ui;
 		showProgress('Starting');
 		$('start').hidden = true;
@@ -373,7 +376,8 @@ async function explore(): Promise<void> {
 		setUpEmotes(viewer);
 		setUpSound(viewer);
 		setUpHelp();
-		void restoreSwitch(viewer);
+		// And on foot, the character where it stood, once its look is set.
+		if (carried.view?.walker) void viewer.walkAt(carried.view.walker).then((problem) => problem && notify(problem));
 	} catch (e) {
 		perf.log('error', `could not start: ${(e as Error).message}`);
 		setStatus(`Could not start: ${(e as Error).message}`, true);

@@ -313,6 +313,18 @@ export class WalkControls {
 		return this.facing + this.orbit;
 	}
 
+	/** The camera's turn from behind the character and how far back it is zoomed, for aim. */
+	get aim(): { orbit: number; zoom: number } {
+		return { orbit: this.orbit, zoom: this.zoomTarget };
+	}
+
+	/** Turns and zooms the camera at once, as aim gave them (after place, which resets them). */
+	set aim({ orbit, zoom }: { orbit: number; zoom: number }) {
+		this.orbit = orbit;
+		this.zoom = this.zoomTarget = this.distance = THREE.MathUtils.clamp(zoom, MIN_ZOOM, MAX_ZOOM);
+		this.updateCamera(0);
+	}
+
 	/** Capsule radius and height for the character's size. */
 	get radius(): number {
 		return RADIUS * this.scale;

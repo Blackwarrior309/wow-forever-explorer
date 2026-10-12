@@ -341,9 +341,37 @@ function setUpVersions(): void {
 		render();
 		list.querySelector<HTMLElement>(`[data-product="${CSS.escape(product)}"] .version-handle`)?.focus();
 	};
-	const clearDrop = () => {
-		for (const row of list.children) row.classList.remove('dragging', 'drop-before', 'drop-after');
+	const clearMarks = () => {
+		for (const row of list.children) row.classList.remove('drop-before', 'drop-after');
 	};
+	/** Where a row dropped at a height goes: before the first row reaching below it, or after the last. */
+	const dropAt = (y: number) => {
+		const rows = [...list.children] as HTMLElement[];
+		const i = rows.findIndex((row) => y < row.getBoundingClientRect().top + row.offsetHeight / 2);
+		return i < 0 ? { row: rows.at(-1), after: true } : { row: rows[i], after: false };
+	};
+	// The whole list takes the drop, the gaps between rows and the row dragged too: only rows did,
+	// and the cursor said no drop over the rest.
+	list.addEventListener('dragover', (e) => {
+		if (!dragged) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		clearMarks();
+		const { row, after } = dropAt(e.clientY);
+		row?.classList.add(after ? 'drop-after' : 'drop-before');
+	});
+	list.addEventListener('dragleave', (e) => {
+		if (!list.contains(e.relatedTarget as Node | null)) clearMarks();
+	});
+	list.addEventListener('drop', (e) => {
+		if (!dragged) return;
+		e.preventDefault();
+		const moving = dragged;
+		dragged = null;
+		const { row, after } = dropAt(e.clientY);
+		if (row?.dataset.product && row.dataset.product !== moving) move(moving, row.dataset.product, after);
+		else render();
+	});
 	const render = () => {
 		const order = versionOrder();
 		list.replaceChildren(...order.map((p, i) => {
@@ -365,27 +393,16 @@ function setUpVersions(): void {
 			});
 			handle.addEventListener('dragstart', (e) => {
 				dragged = p.product;
-				e.dataTransfer?.setData('text/plain', p.product);
+				if (e.dataTransfer) {
+					e.dataTransfer.effectAllowed = 'move';
+					e.dataTransfer.setData('text/plain', p.product);
+				}
 				row.classList.add('dragging');
 			});
 			handle.addEventListener('dragend', () => {
 				dragged = null;
-				clearDrop();
-			});
-			const below = (e: DragEvent) => e.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
-			row.addEventListener('dragover', (e) => {
-				if (!dragged || dragged === p.product) return;
-				e.preventDefault();
-				clearDrop();
-				row.classList.add(below(e) ? 'drop-after' : 'drop-before');
-			});
-			row.addEventListener('dragleave', () => row.classList.remove('drop-before', 'drop-after'));
-			row.addEventListener('drop', (e) => {
-				if (!dragged) return;
-				e.preventDefault();
-				const moving = dragged;
-				dragged = null;
-				move(moving, p.product, below(e));
+				row.classList.remove('dragging');
+				clearMarks();
 			});
 			const button = document.createElement('button');
 			button.className = 'version-choice';

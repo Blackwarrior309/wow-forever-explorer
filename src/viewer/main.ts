@@ -149,6 +149,8 @@ function switchProduct(product: string): void {
 	} catch {
 		// Not remembered: a reload comes back to the version it was.
 	}
+	// Done with: closed here, so this viewer, kept for quick switching, doesn't come back with it open.
+	$<HTMLDetailsElement>('version').open = false;
 	if (host && source && infoViewer) host.switchProduct(window, product, source, currentState());
 	else reloadWith(currentState());
 }

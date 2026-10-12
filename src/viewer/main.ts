@@ -290,45 +290,122 @@ $('explore').addEventListener('click', () => {
 	else void explore();
 });
 
+const ORDER_KEY = 'mapExplorer.gameOrder';
+
+/** The installed versions in the menu's order: as the user arranged them, the rest after as installed. */
+function versionOrder(): ProductInfo[] {
+	const saved = readSaved<{ order: string[] }>(ORDER_KEY).order;
+	const order = Array.isArray(saved) ? saved : [];
+	const rank = (p: ProductInfo) => (order.includes(p.product) ? order.indexOf(p.product) : order.length + installed.indexOf(p));
+	return [...installed].sort((a, b) => rank(a) - rank(b));
+}
+
 /**
  * The Game version menu: every version in the folder, the open one marked; choosing another
- * reloads into it. Ctrl and a number choose one too, in the menu's order.
+ * switches to it. Ctrl and a number choose one too, in the menu's order, which the handles at
+ * the left rearrange (dragged, or the arrow keys on one). The rows follow evaera's design in #8.
  */
 function setUpVersions(): void {
 	const current = $<HTMLSelectElement>('product').value;
+	const list = $('version-list');
 	$('version').hidden = installed.length < 2;
-	$('version-list').replaceChildren(...installed.map((p, i) => {
-		const button = document.createElement('button');
-		const name = document.createElement('span');
-		name.className = 'version-name';
-		name.textContent = productName(p.product);
-		const version = document.createElement('small');
-		version.textContent = p.version;
-		name.append(version);
-		button.append(name);
-		const key = versionKey(i);
-		if (key) {
-			const kbd = document.createElement('kbd');
-			kbd.textContent = `Ctrl+${key}`;
-			button.append(kbd);
-			button.setAttribute('aria-keyshortcuts', `Control+${key}`);
-		}
-		if (p.product === current) {
-			button.className = 'primary';
-			button.setAttribute('aria-current', 'true');
-			button.title = `${p.product}: the version open now`;
-		} else {
-			button.title = p.product;
-			button.addEventListener('click', () => switchProduct(p.product));
-		}
-		return button;
-	}));
+	let dragged: string | null = null;
+	const move = (product: string, target: string, after: boolean) => {
+		const order = versionOrder().map((p) => p.product).filter((id) => id !== product);
+		order.splice(order.indexOf(target) + Number(after), 0, product);
+		save(ORDER_KEY, { order });
+		render();
+		list.querySelector<HTMLElement>(`[data-product="${CSS.escape(product)}"] .version-handle`)?.focus();
+	};
+	const clearDrop = () => {
+		for (const row of list.children) row.classList.remove('dragging', 'drop-before', 'drop-after');
+	};
+	const render = () => {
+		const order = versionOrder();
+		list.replaceChildren(...order.map((p, i) => {
+			const row = document.createElement('div');
+			row.className = 'version-row';
+			row.dataset.product = p.product;
+			const handle = document.createElement('button');
+			handle.className = 'version-handle';
+			handle.textContent = '☰';
+			handle.draggable = true;
+			handle.title = 'Drag, or the arrow keys, to move it: the order sets the Ctrl+number keys';
+			handle.setAttribute('aria-label', `Move ${productName(p.product)}`);
+			handle.addEventListener('keydown', (e) => {
+				if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return;
+				e.preventDefault();
+				e.stopPropagation();
+				const target = order[i + (e.code === 'ArrowUp' ? -1 : 1)];
+				if (target) move(p.product, target.product, e.code === 'ArrowDown');
+			});
+			handle.addEventListener('dragstart', (e) => {
+				dragged = p.product;
+				e.dataTransfer?.setData('text/plain', p.product);
+				row.classList.add('dragging');
+			});
+			handle.addEventListener('dragend', () => {
+				dragged = null;
+				clearDrop();
+			});
+			const below = (e: DragEvent) => e.clientY > row.getBoundingClientRect().top + row.offsetHeight / 2;
+			row.addEventListener('dragover', (e) => {
+				if (!dragged || dragged === p.product) return;
+				e.preventDefault();
+				clearDrop();
+				row.classList.add(below(e) ? 'drop-after' : 'drop-before');
+			});
+			row.addEventListener('dragleave', () => row.classList.remove('drop-before', 'drop-after'));
+			row.addEventListener('drop', (e) => {
+				if (!dragged) return;
+				e.preventDefault();
+				const moving = dragged;
+				dragged = null;
+				move(moving, p.product, below(e));
+			});
+			const button = document.createElement('button');
+			button.className = 'version-choice';
+			const open = p.product === current;
+			button.classList.toggle('active', open);
+			const mark = document.createElement('span');
+			mark.className = 'version-mark';
+			mark.textContent = open ? '✓' : '';
+			const name = document.createElement('span');
+			name.className = 'version-name';
+			name.textContent = productName(p.product);
+			const build = document.createElement('small');
+			build.textContent = p.version;
+			name.append(build);
+			button.append(mark, name);
+			const key = versionKey(i);
+			if (key) {
+				const kbd = document.createElement('kbd');
+				kbd.textContent = `Ctrl+${key}`;
+				button.append(kbd);
+				button.setAttribute('aria-keyshortcuts', `Control+${key}`);
+			}
+			if (open) {
+				button.setAttribute('aria-current', 'true');
+				button.title = `${p.product}: the version open now`;
+			} else {
+				button.title = p.product;
+				button.addEventListener('click', () => switchProduct(p.product));
+			}
+			row.append(handle, button);
+			return row;
+		}));
+	};
+	render();
+	// Moved in another viewer of the same page (see Quick switching).
+	window.addEventListener('storage', (e) => {
+		if (e.key === ORDER_KEY) render();
+	});
 	if (installed.length < 2) return;
 	window.addEventListener('keydown', (e) => {
 		if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.repeat || isTyping(e)) return;
 		const digit = /^Digit(\d)$/.exec(e.code)?.[1];
 		if (digit === undefined) return;
-		const chosen = installed[(Number(digit) + 9) % 10];
+		const chosen = versionOrder()[(Number(digit) + 9) % 10];
 		if (!chosen) return;
 		// Not the browser's own Ctrl+number, which goes to another tab.
 		e.preventDefault();
@@ -451,8 +528,10 @@ document.addEventListener('change', (e) => {
 	if (!isTyping(e) || e.target instanceof HTMLSelectElement) (e.target as HTMLElement).blur();
 });
 document.addEventListener('click', (e) => {
-	// Space flies up; it mustn't fold a panel or press a button again.
-	(e.target as Element).closest<HTMLElement>('summary, button')?.blur();
+	// Space flies up; it mustn't fold a panel or press a button again. A version's handle keeps
+	// the focus, for the arrow keys that move it.
+	const control = (e.target as Element).closest<HTMLElement>('summary, button');
+	if (!control?.classList.contains('version-handle')) control?.blur();
 });
 $('view').addEventListener('pointerdown', () => {
 	(document.activeElement as HTMLElement | null)?.blur();

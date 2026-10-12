@@ -644,29 +644,92 @@ kbd {
 	border-color: var(--accent);
 }
 
-/* The Game version menu: one button per installed version. */
+/*
+ * The Game version menu: a row per installed version, a handle at the left to move it and the
+ * rest choosing it; the open one marked and lit. After evaera's design in #8.
+ */
 #version-list {
 	display: grid;
-	gap: 4px;
-	min-width: 240px;
+	gap: 2px;
+	min-width: 280px;
+	max-height: min(60vh, 560px);
+	overflow-y: auto;
 }
 
-/* Its name with the build after it, and its Ctrl+number at the right. */
-#version-list button {
+.version-row {
+	display: flex;
+	align-items: stretch;
+	gap: 4px;
+	border-block: 2px solid transparent;
+}
+
+.version-row.drop-before {
+	border-top-color: var(--accent);
+}
+
+.version-row.drop-after {
+	border-bottom-color: var(--accent);
+}
+
+.version-row.dragging {
+	opacity: 0.5;
+}
+
+:is(.wow-ui, body) #version-list :is(.version-handle, .version-choice) {
+	border-image: none;
+	box-shadow: none;
+}
+
+:is(.wow-ui, body) #version-list .version-handle {
+	flex: 0 0 26px;
+	padding: 4px;
+	cursor: grab;
+	color: #aaa;
+	background: transparent;
+	border: 0;
+}
+
+:is(.wow-ui, body) #version-list .version-handle:active {
+	cursor: grabbing;
+}
+
+:is(.wow-ui, body) #version-list .version-choice {
+	flex: 1;
 	display: flex;
 	align-items: center;
-	gap: 12px;
+	gap: 8px;
+	padding: 6px 8px;
 	text-align: left;
+	background: #17130f;
+	border: 1px solid #544631;
+}
+
+:is(.wow-ui, body) #version-list .version-choice:hover {
+	background: #30271b;
+}
+
+:is(.wow-ui, body) #version-list .version-choice.active {
+	color: #ffe19b;
+	background: #3c2d13;
+	border-color: #d6ac49;
+}
+
+.version-mark {
+	width: 12px;
+	color: #ffd100;
 }
 
 .version-name {
 	flex: 1;
+	white-space: nowrap;
 }
 
+/* The build on a line of its own, so names don't wrap or get cut off. */
 .version-name small {
-	margin-left: 6px;
-	font-size: 11px;
-	opacity: 0.7;
+	display: block;
+	margin-top: 2px;
+	font-size: 10px;
+	color: #b8afa1;
 }
 
 #version-list kbd {

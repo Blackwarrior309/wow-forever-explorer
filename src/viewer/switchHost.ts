@@ -69,17 +69,18 @@ export function hostViewers(): void {
 	/** Shows the frame a switch is waiting for, at what the one shown shows now, and keeps that one. */
 	async function commit(next: Frame): Promise<void> {
 		const previous = shown;
-		const state = previous.session!.state();
 		try {
-			await next.session!.show(state);
+			await next.session!.show(previous.session!.state());
 		} catch (e) {
-			giveUp(`${productName(next.product ?? '')} couldn't show this place (${(e as Error).message}).`);
+			// Cancelled meanwhile, perhaps with another switch begun since: that one isn't this one's to end.
+			if (pending === next) giveUp(`${productName(next.product ?? '')} couldn't show this place (${(e as Error).message}).`);
 			return;
 		}
-		// Cancelled meanwhile.
 		if (pending !== next) return;
 		pending = null;
 		clearTimeout(timer);
+		// Now, not when the switch began: a key let go meanwhile isn't held any more.
+		const { keys = [] } = previous.session!.state();
 		previous.session!.pause();
 		previous.element.classList.remove('shown');
 		previous.element.inert = true;
@@ -88,7 +89,7 @@ export function hostViewers(): void {
 		if (kept && kept !== next) kept.element.remove();
 		kept = previous;
 		shown = next;
-		next.session!.activate(state.keys ?? []);
+		next.session!.activate(keys);
 		next.element.contentWindow?.focus();
 		banner.hidden = true;
 	}

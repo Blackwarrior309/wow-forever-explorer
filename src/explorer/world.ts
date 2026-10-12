@@ -1,6 +1,6 @@
 import { parseAdtRoot, TILE_CELLS, TILE_SIZE, tileGrids } from '../formats/adt';
 import { parseAdtTex } from '../formats/adtTex';
-import { blpTexture, decodeBlp, type Image, type TextureData } from '../formats/blp';
+import { blpTexture, decodeBlp, mipmapped, type Image, type TextureData } from '../formats/blp';
 import type { Db2 } from '../formats/db2';
 import type { LiquidKind } from '../formats/mh2o';
 import { parseWdl, WDL_CELLS } from '../formats/wdl';
@@ -205,14 +205,30 @@ export class WorldLoader {
 		}));
 	}
 
-	/** Baked map textures, starting at the largest mip no bigger than maxSize. */
+	/**
+	 * Baked map textures, starting at the largest mip no bigger than maxSize. Versions without
+	 * them (Classic) get the tile's minimap picture, which shows the same ground the same way up.
+	 */
 	async loadTileTextures(wdtFdid: number, coords: [number, number][], maxSize: number, compressed: boolean): Promise<TileTexture[]> {
 		const wdt = await this.maps.wdt(wdtFdid);
-		return Promise.all(coords.map(async ([x, y]) => ({
-			x,
-			y,
-			texture: await this.readTexture(wdt.tiles[y * 64 + x]?.files.mapTexture ?? 0, maxSize, compressed),
-		})));
+		return Promise.all(coords.map(async ([x, y]) => {
+			const files = wdt.tiles[y * 64 + x]?.files;
+			return { x, y, texture: files?.mapTexture ? await this.readTexture(files.mapTexture, maxSize, compressed) : await this.minimapTexture(files?.minimap ?? 0, maxSize, compressed) };
+		}));
+	}
+
+	/**
+	 * A minimap picture as a map texture: Classic's are stored without mips, so the chain is made
+	 * here, from the size map textures come in down, as they have. Null if it can't be read.
+	 */
+	private async minimapTexture(fdid: number, maxSize: number, compressed: boolean): Promise<TextureData | null> {
+		if (fdid === 0 || this.storage.status(fdid) !== 'ok') return null;
+		try {
+			const image = decodeBlp(await this.storage.readFile(fdid));
+			return mipmapped(image, Math.min(maxSize, image.width), compressed);
+		} catch {
+			return null;
+		}
 	}
 
 	async loadNearTile(wdtFdid: number, x: number, y: number, compressed: boolean): Promise<NearTile> {

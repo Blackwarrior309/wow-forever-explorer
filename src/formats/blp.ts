@@ -218,3 +218,115 @@ export function blpTexture(bytes: Uint8Array, maxSize = Infinity, compressed = t
 	}
 	return { format, width: mips[0].width, height: mips[0].height, mips };
 }
+
+/**
+ * A picture as a square texture of the given size with a full mip chain down to 1x1, each level
+ * a box-filtered half of the one before; DXT1 when compressed (opaque: colour only), else RGBA.
+ * For pictures stored without mips (Classic's minimaps), which shimmer when drawn small.
+ */
+export function mipmapped(image: Image, size: number, compressed: boolean): TextureData {
+	let level = resize(image, size);
+	const mips: TextureData['mips'] = [];
+	for (;;) {
+		mips.push({ width: level.width, height: level.height, data: compressed ? encodeDxt1(level) : level.rgba });
+		if (level.width === 1 && level.height === 1) break;
+		level = resize(level, Math.max(1, level.width >> 1));
+	}
+	return { format: compressed ? 'dxt1' : 'rgba', width: size, height: size, mips };
+}
+
+/** Scaled to size x size, each texel the average of the source texels it covers. */
+function resize(image: Image, size: number): Image {
+	const rgba = new Uint8Array(size * size * 4);
+	const src = image.rgba;
+	const sx = image.width / size;
+	const sy = image.height / size;
+	for (let y = 0; y < size; y++) {
+		const y0 = Math.floor(y * sy), y1 = Math.max(y0 + 1, Math.floor((y + 1) * sy));
+		for (let x = 0; x < size; x++) {
+			const x0 = Math.floor(x * sx), x1 = Math.max(x0 + 1, Math.floor((x + 1) * sx));
+			let r = 0, g = 0, b = 0, a = 0;
+			for (let v = y0; v < y1; v++) {
+				for (let i = (v * image.width + x0) * 4, end = (v * image.width + x1) * 4; i < end; i += 4) {
+					r += src[i];
+					g += src[i + 1];
+					b += src[i + 2];
+					a += src[i + 3];
+				}
+			}
+			const n = (y1 - y0) * (x1 - x0);
+			const o = (y * size + x) * 4;
+			rgba[o] = Math.round(r / n);
+			rgba[o + 1] = Math.round(g / n);
+			rgba[o + 2] = Math.round(b / n);
+			rgba[o + 3] = Math.round(a / n);
+		}
+	}
+	return { width: size, height: size, rgba };
+}
+
+/**
+ * DXT1 blocks for an opaque picture: each 4x4 block's two end colours are the corners of its
+ * colours' box, each texel the nearest of the four colours between them.
+ */
+function encodeDxt1(image: Image): Uint8Array {
+	const { width, height, rgba } = image;
+	const bw = Math.ceil(width / 4), bh = Math.ceil(height / 4);
+	const out = new Uint8Array(bw * bh * 8);
+	const view = new DataView(out.buffer);
+	const texels = new Uint8Array(16 * 3);
+	const palette = new Uint8Array(16);
+	for (let by = 0; by < bh; by++) {
+		for (let bx = 0; bx < bw; bx++) {
+			let minR = 255, minG = 255, minB = 255, maxR = 0, maxG = 0, maxB = 0;
+			for (let i = 0; i < 16; i++) {
+				// A level smaller than a block repeats its edge.
+				const x = Math.min(bx * 4 + (i & 3), width - 1), y = Math.min(by * 4 + (i >> 2), height - 1);
+				const p = (y * width + x) * 4;
+				const r = rgba[p], g = rgba[p + 1], b = rgba[p + 2];
+				texels[i * 3] = r;
+				texels[i * 3 + 1] = g;
+				texels[i * 3 + 2] = b;
+				if (r < minR) minR = r;
+				if (g < minG) minG = g;
+				if (b < minB) minB = b;
+				if (r > maxR) maxR = r;
+				if (g > maxG) maxG = g;
+				if (b > maxB) maxB = b;
+			}
+			let c0 = to565(maxR, maxG, maxB), c1 = to565(minR, minG, minB);
+			if (c0 < c1) [c0, c1] = [c1, c0];
+			const o = (by * bw + bx) * 8;
+			view.setUint16(o, c0, true);
+			view.setUint16(o + 2, c1, true);
+			// Equal ends would mean the three-colour mode; every texel is that colour anyway.
+			if (c0 === c1) continue;
+			rgb565(c0, palette, 0);
+			rgb565(c1, palette, 4);
+			for (let c = 0; c < 3; c++) {
+				palette[8 + c] = (2 * palette[c] + palette[4 + c]) / 3;
+				palette[12 + c] = (palette[c] + 2 * palette[4 + c]) / 3;
+			}
+			let indices = 0;
+			for (let i = 0; i < 16; i++) {
+				const r = texels[i * 3], g = texels[i * 3 + 1], b = texels[i * 3 + 2];
+				let best = 0, bestDistance = Infinity;
+				for (let k = 0; k < 4; k++) {
+					const dr = r - palette[k * 4], dg = g - palette[k * 4 + 1], db = b - palette[k * 4 + 2];
+					const d = dr * dr + dg * dg + db * db;
+					if (d < bestDistance) {
+						best = k;
+						bestDistance = d;
+					}
+				}
+				indices |= best << (i * 2);
+			}
+			view.setUint32(o + 4, indices >>> 0, true);
+		}
+	}
+	return out;
+}
+
+function to565(r: number, g: number, b: number): number {
+	return (Math.round(r * 31 / 255) << 11) | (Math.round(g * 63 / 255) << 5) | Math.round(b * 31 / 255);
+}

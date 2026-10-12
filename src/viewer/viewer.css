@@ -648,6 +648,30 @@ kbd {
 #version-list {
 	display: grid;
 	gap: 4px;
+	min-width: 240px;
+}
+
+/* Its name with the build under it, and its Ctrl+number at the right. */
+#version-list button {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	text-align: left;
+}
+
+.version-name {
+	flex: 1;
+}
+
+.version-name small {
+	display: block;
+	margin-top: 2px;
+	font-size: 10px;
+	opacity: 0.7;
+}
+
+#version-list kbd {
+	white-space: nowrap;
 }
 
 /* Go to: the last menu, at the right, its panel a search box with the matches under it. */

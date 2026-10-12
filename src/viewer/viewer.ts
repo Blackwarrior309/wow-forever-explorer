@@ -1416,7 +1416,8 @@ export class Viewer {
 		else if (e.code === 'KeyO') this.overview();
 		else if (e.code === 'KeyR') this.controls.flyTo(this.startPosition(), 0, -0.3, 2.5);
 		// Walking, the number keys perform emotes instead (see the Emotes menu).
-		else if (e.code.startsWith('Digit') && !this.walker.active) this.goToContinent(Number(e.code.slice(5)) - 1);
+		// With Ctrl they switch game version (see the Game version menu).
+		else if (e.code.startsWith('Digit') && !this.walker.active && !e.ctrlKey && !e.metaKey && !e.altKey) this.goToContinent(Number(e.code.slice(5)) - 1);
 		else if (e.code === 'Backquote' && !e.ctrlKey && !e.metaKey && !e.altKey) {
 			const problem = this.setWalking(!this.walker.active);
 			if (problem) this.onNotice(problem);

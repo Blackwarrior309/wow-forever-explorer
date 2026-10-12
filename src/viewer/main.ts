@@ -90,6 +90,31 @@ let installed: ProductInfo[] = [];
 /** Set once a game version has been opened: the viewer starts once per page, so another one takes a reload. */
 let exploring = false;
 
+/** What each game version is called, by its product code; others go by their code. */
+const PRODUCT_NAMES: Record<string, string> = {
+	wow_classic_beta: 'Forever',
+	wow_classic_era: 'Classic',
+	wow: 'Retail',
+	wow_classic: 'MoP Classic',
+	wow_anniversary: 'Classic Anniversary',
+	wowt: 'Retail PTR',
+	wowxptr: 'Retail PTR (next patch)',
+	wow_beta: 'Retail Beta',
+	wow_classic_ptr: 'MoP Classic PTR',
+	wow_classic_era_ptr: 'Classic Era PTR',
+};
+/** The Game version menu lists these first, in this order (and so they get Ctrl+1, 2, 3); the rest after. */
+const PRODUCT_ORDER = ['wow_classic_beta', 'wow_classic_era', 'wow'];
+
+function productName(product: string): string {
+	return PRODUCT_NAMES[product] ?? product;
+}
+
+/** Ctrl and the number for the nth version in the menu: 1 to 9, then 0; none past the tenth. */
+function versionKey(index: number): string {
+	return index < 10 ? String((index + 1) % 10) : '';
+}
+
 /** The game version chosen in the Game version menu on an earlier visit, if any. */
 function savedProduct(): string | null {
 	try {
@@ -146,8 +171,10 @@ async function useSource(init: SourceInit): Promise<void> {
 		const products = (await storage.setSource(init)).filter((p) => p.product.startsWith('wow'));
 		// Once each: a version can be listed with several builds, and opening it picks the one that can be read.
 		installed = products.filter((p, i) => products.findIndex((q) => q.product === p.product) === i);
+		const rank = (product: string) => (PRODUCT_ORDER.includes(product) ? PRODUCT_ORDER.indexOf(product) : PRODUCT_ORDER.length);
+		installed.sort((a, b) => rank(a.product) - rank(b.product));
 		const select = $<HTMLSelectElement>('product');
-		select.replaceChildren(...products.map((p) => new Option(`${p.product} ${p.version}`, p.product)));
+		select.replaceChildren(...products.map((p) => new Option(`${productName(p.product)} ${p.version}`, p.product)));
 		const saved = savedProduct();
 		// The version chosen before, if it's still installed. Otherwise prefer a classic build: the continent file IDs are the classic ones.
 		const preferred = products.find((p) => p.product === saved) ?? products.find((p) => p.product === 'wow_classic_beta') ?? products.find((p) => p.product.startsWith('wow_classic'));
@@ -264,22 +291,50 @@ $('explore').addEventListener('click', () => {
 	else void explore();
 });
 
-/** The Game version menu: every version in the folder, the open one marked; choosing another reloads into it. */
+/**
+ * The Game version menu: every version in the folder, the open one marked; choosing another
+ * reloads into it. Ctrl and a number choose one too, in the menu's order.
+ */
 function setUpVersions(): void {
 	const current = $<HTMLSelectElement>('product').value;
 	$('version').hidden = installed.length < 2;
-	$('version-list').replaceChildren(...installed.map((p) => {
+	$('version-list').replaceChildren(...installed.map((p, i) => {
 		const button = document.createElement('button');
-		button.textContent = `${p.product} ${p.version}`;
+		const name = document.createElement('span');
+		name.className = 'version-name';
+		name.textContent = productName(p.product);
+		const version = document.createElement('small');
+		version.textContent = p.version;
+		name.append(version);
+		button.append(name);
+		const key = versionKey(i);
+		if (key) {
+			const kbd = document.createElement('kbd');
+			kbd.textContent = `Ctrl+${key}`;
+			button.append(kbd);
+			button.setAttribute('aria-keyshortcuts', `Control+${key}`);
+		}
 		if (p.product === current) {
 			button.className = 'primary';
 			button.setAttribute('aria-current', 'true');
-			button.title = 'The version open now';
+			button.title = `${p.product}: the version open now`;
 		} else {
+			button.title = p.product;
 			button.addEventListener('click', () => switchProduct(p.product));
 		}
 		return button;
 	}));
+	if (installed.length < 2) return;
+	window.addEventListener('keydown', (e) => {
+		if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.repeat || isTyping(e)) return;
+		const digit = /^Digit(\d)$/.exec(e.code)?.[1];
+		if (digit === undefined) return;
+		const chosen = installed[(Number(digit) + 9) % 10];
+		if (!chosen) return;
+		// Not the browser's own Ctrl+number, which goes to another tab.
+		e.preventDefault();
+		if (chosen.product !== current) switchProduct(chosen.product);
+	});
 }
 
 /** Opens the chosen game version and starts the viewer. */

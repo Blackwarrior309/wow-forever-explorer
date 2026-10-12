@@ -78,16 +78,17 @@ button:disabled {
 }
 
 /*
- * The start screen: choosing the folder and game version, then the loading bar, in one look from
- * the first click until the world shows. It has its own colours and font, and the .wow-ui rules
- * leave it alone, so it doesn't change under the bar when the game's interface art is read.
+ * The start screen: a small launcher panel with the folder button, which the loading bar then
+ * takes the place of, in one look from the first click until the world shows. It has its own
+ * colours and font, and the .wow-ui rules leave it alone, so nothing changes under the bar when
+ * the game's interface art is read.
  */
 #start {
-	--accent: #e3b04b;
-	--accent-bright: #f3c866;
-	--text: #eceef2;
-	--muted: #9aa1ac;
-	--line: rgba(255, 255, 255, 0.1);
+	--accent: #d9a441;
+	--accent-bright: #ecb850;
+	--text: #e6e8ec;
+	--muted: #8f96a3;
+	--line: #2a2e35;
 	--bad: #e58080;
 	position: fixed;
 	inset: 0;
@@ -95,13 +96,11 @@ button:disabled {
 	z-index: 10;
 	display: grid;
 	place-items: center;
-	padding: 16px;
-	font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	/* A little above the middle, where a dialog sits. */
+	padding: 16px 16px 10vh;
+	font: 13px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	color: var(--text);
-	background:
-		radial-gradient(ellipse 70% 50% at 50% -10%, rgba(227, 176, 75, 0.16), transparent 70%),
-		radial-gradient(ellipse 90% 60% at 50% 110%, rgba(38, 84, 128, 0.3), transparent 70%),
-		#0d0f12;
+	background: radial-gradient(ellipse 60% 45% at 50% 0%, rgba(217, 164, 65, 0.1), transparent 70%), #0d0f12;
 	transition: opacity 0.6s ease;
 }
 
@@ -112,39 +111,48 @@ button:disabled {
 }
 
 .card {
-	width: min(480px, 100%);
-	padding: 36px 36px 28px;
+	width: min(468px, 100%);
+	padding: 20px 24px 16px;
 	border: 1px solid var(--line);
-	border-radius: 18px;
-	background: rgba(20, 23, 28, 0.86);
-	backdrop-filter: blur(16px);
-	box-shadow: 0 28px 72px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-	text-align: center;
+	border-radius: 8px;
+	background: #15181d;
+	box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+	transition: border-color 0.15s;
+}
+
+/* A folder held over the page: the whole panel is the target. */
+.card:has(#drop.dragging) {
+	border-color: var(--accent);
+}
+
+.card header {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	margin-bottom: 20px;
 }
 
 .card .logo {
-	display: block;
-	width: 64px;
-	height: 64px;
-	margin: 0 auto 16px;
-	filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5));
+	flex: none;
+	width: 32px;
+	height: 32px;
+	margin-top: 1px;
 }
 
 .card h1 {
-	margin: 0 0 6px;
-	font-size: 26px;
+	margin: 0;
+	font-size: 17px;
 	font-weight: 600;
-	letter-spacing: -0.01em;
-	line-height: 1.2;
-	color: var(--text);
+	line-height: 1.3;
+	letter-spacing: 0.01em;
 }
 
 .card .tagline {
-	margin: 0 0 24px;
+	margin: 1px 0 0;
 	color: var(--muted);
 }
 
-/* The drop zone and the loading bar share one cell: the zone sets its size, the bar sits over it while loading. */
+/* The folder row and the loading bar share one cell: the row sets its size, the bar sits over it while loading. */
 .step {
 	display: grid;
 }
@@ -159,18 +167,8 @@ button:disabled {
 
 #drop {
 	display: grid;
-	justify-items: center;
-	gap: 12px;
-	padding: 26px 18px;
-	border: 1px dashed rgba(255, 255, 255, 0.18);
-	border-radius: 12px;
-	background: rgba(255, 255, 255, 0.02);
-	transition: border-color 0.15s, background-color 0.15s;
-}
-
-#drop.dragging {
-	border-color: var(--accent);
-	background: rgba(227, 176, 75, 0.08);
+	justify-items: start;
+	gap: 8px;
 }
 
 #drop .hint {
@@ -180,33 +178,31 @@ button:disabled {
 
 /* The folder path on its own line, whole. */
 #start code {
-	display: inline-block;
-	margin-top: 4px;
-	padding: 1px 5px;
-	border-radius: 4px;
-	font-size: 12px;
+	display: block;
+	width: fit-content;
+	margin-top: 3px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: 11.5px;
 	color: var(--text);
-	background: rgba(255, 255, 255, 0.07);
+	background: #1f232a;
 }
 
 #start button {
 	font: inherit;
+	font-weight: 500;
 	color: var(--text);
-	background: rgba(255, 255, 255, 0.06);
-	border: 1px solid var(--line);
-	border-radius: 10px;
-	padding: 8px 16px;
+	background: #22262d;
+	border: 1px solid #343941;
+	border-radius: 6px;
+	padding: 7px 14px;
 	cursor: pointer;
-	transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+	transition: background-color 0.15s, border-color 0.15s;
 }
 
 #start button:hover:not(:disabled) {
-	background: rgba(255, 255, 255, 0.1);
-	border-color: rgba(255, 255, 255, 0.22);
-}
-
-#start button:active:not(:disabled) {
-	transform: translateY(1px);
+	background: #2a2f37;
+	border-color: #434a54;
 }
 
 #start button:disabled {
@@ -217,29 +213,22 @@ button:disabled {
 #start button.primary {
 	color: #1b1407;
 	font-weight: 600;
-	background: linear-gradient(180deg, var(--accent-bright), var(--accent));
-	border-color: transparent;
-	box-shadow: 0 6px 20px rgba(227, 176, 75, 0.25);
+	background: var(--accent);
+	border-color: var(--accent);
 }
 
 #start button.primary:hover:not(:disabled) {
-	background: linear-gradient(180deg, #f8d279, #ecbd58);
-	border-color: transparent;
-	box-shadow: 0 8px 26px rgba(227, 176, 75, 0.35);
-}
-
-#start button.big {
-	font-size: 15px;
-	padding: 12px 24px;
+	background: var(--accent-bright);
+	border-color: var(--accent-bright);
 }
 
 #start select {
 	font: inherit;
 	color: var(--text);
 	background: #1b1f25;
-	border: 1px solid var(--line);
-	border-radius: 8px;
-	padding: 7px 10px;
+	border: 1px solid #343941;
+	border-radius: 6px;
+	padding: 6px 8px;
 }
 
 #start select:focus-visible, #start button:focus-visible {
@@ -250,7 +239,7 @@ button:disabled {
 #loading {
 	display: grid;
 	align-self: center;
-	gap: 12px;
+	gap: 10px;
 }
 
 #loading-text {
@@ -258,9 +247,9 @@ button:disabled {
 }
 
 .loading-bar {
-	height: 6px;
-	border-radius: 3px;
-	background: rgba(255, 255, 255, 0.08);
+	height: 4px;
+	border-radius: 2px;
+	background: #22262d;
 	overflow: hidden;
 }
 
@@ -268,8 +257,8 @@ button:disabled {
 	position: relative;
 	width: 0%;
 	height: 100%;
-	border-radius: 3px;
-	background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+	border-radius: 2px;
+	background: var(--accent);
 	transition: width 0.4s ease-out;
 }
 
@@ -278,7 +267,7 @@ button:disabled {
 	content: '';
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent) -60% 0 / 40% 100% no-repeat;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent) -60% 0 / 40% 100% no-repeat;
 	animation: loading-glint 1.6s ease-in-out infinite;
 }
 
@@ -295,10 +284,9 @@ button:disabled {
 #product-step {
 	display: flex;
 	flex-wrap: wrap;
-	justify-content: center;
 	align-items: center;
-	gap: 10px;
-	margin-top: 20px;
+	gap: 8px;
+	margin-top: 14px;
 }
 
 #product-step label {
@@ -309,7 +297,7 @@ button:disabled {
 }
 
 #status {
-	margin: 16px 0 0;
+	margin: 12px 0 0;
 	color: var(--muted);
 }
 
@@ -322,8 +310,10 @@ button:disabled {
 }
 
 .card .note {
-	margin: 22px 0 0;
-	font-size: 12px;
+	margin: 16px 0 0;
+	padding-top: 10px;
+	border-top: 1px solid var(--line);
+	font-size: 11.5px;
 	color: var(--muted);
 }
 

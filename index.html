@@ -18,14 +18,18 @@
 	     was found for it. -->
 	<div id="start" class="finding">
 		<div class="card">
-			<img class="logo" src="/icon.svg" alt="" width="64" height="64">
-			<h1>Map Explorer</h1>
-			<p class="tagline">Fly over Azeroth, drawn from the game files on your computer.</p>
-			<!-- The loading bar takes the drop zone's place, over it, so the card keeps its size. -->
+			<header>
+				<img class="logo" src="/icon.svg" alt="" width="32" height="32">
+				<div>
+					<h1>Map Explorer</h1>
+					<p class="tagline">Fly over Azeroth, drawn from the game files on your computer.</p>
+				</div>
+			</header>
+			<!-- The loading bar takes the folder row's place, over it, so the card keeps its size. -->
 			<div class="step">
 				<div id="drop">
-					<button id="pick" class="primary big">Choose your World of Warcraft folder</button>
-					<div class="hint">or drag it here · usually <code>C:\Program Files (x86)\World of Warcraft</code></div>
+					<button id="pick" class="primary">Choose your World of Warcraft folder</button>
+					<div class="hint">or drop the folder on this page · usually <code>C:\Program Files (x86)\World of Warcraft</code></div>
 				</div>
 				<div id="loading" hidden aria-live="polite">
 					<div id="loading-text"></div>

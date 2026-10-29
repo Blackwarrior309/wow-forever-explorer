@@ -2625,6 +2625,19 @@ body:not(.wow-hud) #main-bar {
 	cursor: pointer;
 }
 
+/* Not the interface's panel buttons (.wow-ui button): an action button is its icon. */
+.wow-ui #action-bar button,
+#action-bar button {
+	border: 0;
+	border-image: none;
+	padding: 0;
+	background-color: #111;
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	min-width: 0;
+}
+
 /* The slot's bevelled border over the icon, the highlight over that while pointed at. */
 #action-bar button::after,
 #action-bar button::before {

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, test, spyOn } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import type { SpawnInfo } from '../src/explorer/spawns';
@@ -75,6 +75,34 @@ test('a fighting creature remains pickable after leaving the instanced crowd', (
 	ray.far = 10;
 	mob.state = 'dead';
 	expect(a.pick(ray)).toBeNull();
+});
+
+test('class trainers check class, level, money and distance and teach abilities only once', () => {
+	const { adventure: a, walker } = world(911, 'Warrior trainer', { alliance: 'friendly', horde: 'hostile' });
+	a.trainers = JSON.parse(readFileSync('public/game/trainers.json', 'utf8'));
+	expect(a.trainers[911]).toBe(1);
+	let opened = '';
+	a.onTrainer = (key) => { opened = key; };
+	a.click({ key: 'k1', info: a.targetInfo('k1')!.info });
+	expect(opened).toBe('k1');
+	const rend = a.abilities.find((ability) => ability.id === 'rend')!;
+	expect(a.knows(rend)).toBe(false);
+	expect(a.trainingProblem('k1', rend)).toBe('Requires level 4');
+	a.level = 4;
+	expect(a.trainingProblem('k1', rend)).toBe('Not enough money');
+	a.money = 100;
+	walker.position.set(30, 0, 0);
+	a.train('k1', rend.id);
+	expect(a.knows(rend)).toBe(false);
+	expect(a.money).toBe(100);
+	walker.position.set(0, 0, 0);
+	a.train('k1', rend.id);
+	expect(a.knows(rend)).toBe(true);
+	expect(a.money).toBe(60);
+	a.train('k1', rend.id);
+	expect(a.money).toBe(60);
+	a.trainers[911] = 8;
+	expect(a.trainerProblem('k1')).toContain('does not teach');
 });
 
 test('a hostile wolf notices the player, fights, dies and gives experience', () => {
@@ -164,7 +192,8 @@ test('together: a mob someone else runs takes our hits by message, and their kil
 	expect(a.mobs.get('k1')?.owner).toBe('aaa');
 	a.setTarget('k1');
 	a.startAttack();
-	run(a, 0.2);
+	const random = spyOn(Math, 'random').mockReturnValue(0.5);
+	try { run(a, 0.2); } finally { random.mockRestore(); }
 	// Our swings go to the owner rather than being applied here.
 	expect(sent.some((e) => e.t === 'hit' && e.k === 'k1')).toBe(true);
 	const before = a.xp;

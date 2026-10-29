@@ -25,9 +25,11 @@ const text = (v: string | undefined) => (v ?? '').replace(/\\n/g, '\n');
 
 // Creatures: what combat needs that the spawn files don't carry.
 const creatures: Record<number, number[]> = {};
+const trainers: Record<number, number> = {};
 const creatureNames = new Map<number, string>();
 for (const c of table('creature_templates')) {
 	creatureNames.set(num(c.entry), c.name);
+	if ((num(c.npc_flags) & 16) && num(c.trainer_type) === 0 && num(c.trainer_class)) trainers[num(c.entry)] = num(c.trainer_class);
 	// [health min, max, damage min, max, attack ms, aggro range, rank]
 	creatures[num(c.entry)] = [num(c.health_min), num(c.health_max), num(c.dmg_min), num(c.dmg_max), num(c.attack_time), num(c.detection_range), num(c.rank)];
 }
@@ -100,5 +102,6 @@ const xp = table('xp_for_level').map((r) => num(r.xp));
 
 mkdirSync(OUT, { recursive: true });
 writeFileSync(join(OUT, 'creatures.json'), JSON.stringify(creatures));
+writeFileSync(join(OUT, 'trainers.json'), JSON.stringify(trainers));
 writeFileSync(join(OUT, 'quests.json'), JSON.stringify({ xp, quests, starts, ends, drops, items, names }));
 console.log(`${Object.keys(creatures).length} creatures, ${Object.keys(quests).length} quests, ${Object.keys(items).length} items written to ${OUT}`);

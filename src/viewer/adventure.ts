@@ -118,6 +118,7 @@ interface Saved {
 	xp: number;
 	money: number;
 	quests: QuestSave;
+	learned?: string[];
 }
 
 const SAVE_KEY = 'mapExplorer.adventure';
@@ -161,6 +162,9 @@ export class Adventure {
 	onMessage: (text: string, error?: boolean) => void = () => {};
 	/** A quest giver or object was clicked near enough to talk to. */
 	onTalk: (kind: Giver, entry: number, name: string) => void = () => {};
+	onTrainer: (key: string, name: string) => void = () => {};
+	trainers: Record<number, number> = {};
+	private learned = new Set<string>();
 	/** Level, experience, money or the quest log changed. */
 	onChange: () => void = () => {};
 
@@ -184,11 +188,13 @@ export class Adventure {
 	/** Loads the game data once (creature stats, quests); resolves when ready. */
 	ready(): Promise<void> {
 		this.loading ??= (async () => {
-			const [creatures, quests] = await Promise.all([
+			const [creatures, quests, trainers] = await Promise.all([
 				fetch(new URL('game/creatures.json', document.baseURI)).then((r) => r.json() as Promise<Record<number, number[]>>),
 				fetch(new URL('game/quests.json', document.baseURI)).then((r) => r.json() as Promise<QuestData>),
+				fetch(new URL('game/trainers.json', document.baseURI)).then((r) => { if (!r.ok) throw new Error('Could not load class trainers'); return r.json() as Promise<Record<number, number>>; }),
 			]);
 			this.creatures = creatures;
+			this.trainers = trainers;
 			this.quests = new QuestBook(quests, this.saved?.quests);
 			this.onChange();
 		})();
@@ -244,10 +250,12 @@ export class Adventure {
 		}
 		this.hp = this.maxHp;
 		this.power = this.cls.resource === 'rage' ? 0 : this.maxPower;
+		// Existing saves keep abilities they could already use before training was introduced.
+		this.learned = new Set(Array.isArray(s?.learned) ? s.learned.filter((id) => this.abilities.some((a) => a.id === id)) : this.abilities.filter((a) => a.level <= this.level).map((a) => a.id));
 	}
 
 	save(): void {
-		const s: Saved = { cls: this.cls.id, level: this.level, xp: this.xp, money: this.money, quests: this.quests?.snapshot() ?? this.saved?.quests ?? { active: [], done: [], bag: {} } };
+		const s: Saved = { cls: this.cls.id, level: this.level, xp: this.xp, money: this.money, learned: [...this.learned], quests: this.quests?.snapshot() ?? this.saved?.quests ?? { active: [], done: [], bag: {} } };
 		this.saved = s;
 		try {
 			localStorage.setItem(SAVE_KEY, JSON.stringify(s));
@@ -267,6 +275,7 @@ export class Adventure {
 		this.power = this.cls.resource === 'rage' ? 0 : this.maxPower;
 		if (this.quests) this.quests = new QuestBook(this.quests.data);
 		this.saved = null;
+		this.learned = new Set(this.abilities.filter((a) => a.level === 1).map((a) => a.id));
 		this.save();
 		this.onChange();
 	}
@@ -360,6 +369,12 @@ export class Adventure {
 				return true;
 			}
 			this.setTarget(key);
+			if (this.trainers[info.entry]) {
+				const why = this.trainerProblem(key);
+				if (why) this.onMessage(why, true);
+				else this.onTrainer(key, info.name);
+				return true;
+			}
 			if (this.quests?.hasBusiness(kind, info.entry, player)) {
 				if (!near(at)) this.onMessage('You are too far away', true);
 				else this.onTalk(kind, info.entry, info.name);
@@ -393,6 +408,33 @@ export class Adventure {
 	}
 
 	// --- Fighting --------------------------------------------------------------------------------
+
+	knows(a: Ability): boolean { return a.level === 1 || this.learned.has(a.id); }
+	trainingCost(a: Ability): number { return a.level * 10; }
+	trainerProblem(key: string): string | null {
+		if (!this.enabled || !this.world.walker.active) return 'Turn Adventure on and walk on the ground first';
+		if (!this.alive) return 'You are dead';
+		if (this.inCombat) return 'You cannot train in combat';
+		const npc = this.world.objects.creature(key);
+		if (!npc || this.reaction(npc.info) === 'hostile' || !this.trainers[npc.info.entry]) return 'No class trainer here';
+		if (this.trainers[npc.info.entry] !== this.cls.id) return `This trainer does not teach ${this.cls.name}s`;
+		if (new THREE.Vector3().setFromMatrixPosition(npc.matrix).distanceTo(this.world.walker.position) > INTERACT_RANGE) return 'You are too far away';
+		return null;
+	}
+	trainingProblem(key: string, ability: Ability): string | null {
+		return this.trainerProblem(key) ?? (!this.abilities.includes(ability) ? 'Wrong class' : this.knows(ability) ? 'Already learned' : ability.level > this.level ? `Requires level ${ability.level}` : this.money < this.trainingCost(ability) ? 'Not enough money' : null);
+	}
+	train(key: string, id: string): void {
+		const ability = this.abilities.find((a) => a.id === id);
+		if (!ability) return this.onMessage('Unknown ability', true);
+		const why = this.trainingProblem(key, ability);
+		if (why) return this.onMessage(why, true);
+		this.money -= this.trainingCost(ability);
+		this.learned.add(ability.id);
+		this.save();
+		this.onChange();
+		this.onMessage(`Learned: ${ability.name}`);
+	}
 
 	private reach(height: number): number {
 		return MELEE_RANGE + 0.4 + height * 0.2;
@@ -431,6 +473,7 @@ export class Adventure {
 	private cannotUse(a: Ability): string | null {
 		if (!this.world.walker.active) return 'Walk on the ground first';
 		if (a.level > this.level) return `Requires level ${a.level}`;
+		if (!this.knows(a)) return 'Visit your class trainer to learn this ability';
 		if (this.cast) return 'Another action is in progress';
 		if (this.now < this.gcdUntil || (this.cooldowns.get(a.id) ?? 0) > this.now) return 'Not ready yet';
 		if (this.power < this.cost(a)) return `Not enough ${this.cls.resource}`;
@@ -613,7 +656,7 @@ export class Adventure {
 			this.hp = this.maxHp;
 			if (this.cls.resource === 'mana') this.power = this.maxPower;
 			this.onMessage(`You have reached level ${this.level}!`);
-			for (const a of this.cls.abilities) if (a.level > this.level - result.levels && a.level <= this.level) this.onMessage(`You have learned ${a.name}`);
+			for (const a of this.cls.abilities) if (a.level > this.level - result.levels && a.level <= this.level) this.onMessage(`Your class trainer can teach you ${a.name}`);
 		}
 		this.save();
 		this.onChange();

@@ -48,6 +48,36 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	document.body.append(book);
 	const showBook = () => { book.hidden = !book.hidden; if (!book.hidden) renderBook(); };
 	$('spellbook-open').onclick = showBook;
+	const trainer = el('section', { id: 'trainer-dialog', className: 'panel adventure-window', hidden: true, role: 'dialog' });
+	trainer.setAttribute('aria-label', 'Class trainer');
+	const trainerTitle = el('h2');
+	const trainerClose = el('button', { textContent: '×', title: 'Close trainer', className: 'plain' });
+	trainerClose.setAttribute('aria-label', 'Close trainer');
+	trainerClose.onclick = () => { trainer.hidden = true; };
+	const trainerList = el('div');
+	trainer.append(el('div', { className: 'quest-head' }, trainerTitle, trainerClose), trainerList);
+	document.body.append(trainer);
+	let trainerKey: string | null = null;
+	const renderTrainer = () => {
+		if (!trainerKey || trainer.hidden) return;
+		const key = trainerKey;
+		const problem = adventure.trainerProblem(key);
+		trainerList.replaceChildren(el('p', { textContent: problem || `${adventure.cls.name} training · You have ${money(adventure.money)}. Training costs are simplified for Adventure.` }));
+		if (problem) return;
+		for (const ability of adventure.abilities) {
+			const why = adventure.trainingProblem(key, ability);
+			const learn = el('button', { textContent: adventure.knows(ability) ? 'Learned' : `Learn · ${money(adventure.trainingCost(ability))}`, disabled: !!why, title: why || `Learn ${ability.name}` });
+			learn.onclick = () => { adventure.train(key, ability.id); renderTrainer(); };
+			trainerList.append(el('article', { className: 'spell-row' }, el('div', {}, el('strong', { textContent: ability.name }), el('small', { textContent: why || `Requires level ${ability.level}` })), learn));
+		}
+		const info = adventure.targetInfo(key)?.info;
+		if (info && adventure.quests?.hasBusiness('c', info.entry, adventure.player)) {
+			const quests = el('button', { textContent: 'Quests' });
+			quests.onclick = () => { trainer.hidden = true; adventure.onTalk('c', info.entry, info.name); };
+			trainerList.append(quests);
+		}
+	};
+	adventure.onTrainer = (key, name) => { trainerKey = key; trainerTitle.textContent = name; book.hidden = true; dialog.hidden = true; trainer.hidden = false; renderTrainer(); };
 
 	// --- The menu ---
 	classSelect.replaceChildren(...CLASSES.map((c) => new Option(c.name, String(c.id))));
@@ -135,11 +165,11 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	const renderBook = () => {
 		bookTitle.textContent = `${adventure.cls.name} · Spellbook`;
 		bookList.replaceChildren(...adventure.abilities.map((a, i) => {
-			const available = a.level <= adventure.level;
+			const available = a.level <= adventure.level && adventure.knows(a);
 			const icon = el('img', { alt: '', className: 'spell-icon', hidden: !icons.get(a.icon), src: icons.get(a.icon) || '' });
 			const cost = adventure.cls.resource === 'mana' ? `${Math.round(a.cost * 100)}% mana` : `${a.cost} ${adventure.cls.resource}`;
 			const detail = [cost, a.kind === 'self' ? 'Self' : a.kind === 'melee' ? 'Melee' : `${a.range ?? 30} yd range`, a.cast ? `${a.cast}s cast` : 'Instant', a.cooldown ? `${a.cooldown}s cooldown` : '', a.damage ? 'Direct damage' : '', a.dot ? 'Damage over time' : '', a.heal || a.hot ? 'Healing' : '', a.shield ? 'Absorbs damage' : '', a.stun ? 'Stuns target' : '', a.buff ? 'Damage buff' : ''].filter(Boolean).join(' · ');
-			const use = el('button', { textContent: available ? `Use · ${i + 2}` : `Level ${a.level}`, disabled: !available });
+			const use = el('button', { textContent: available ? `Use · ${i + 2}` : a.level > adventure.level ? `Level ${a.level}` : 'Visit trainer', disabled: !available });
 			use.onclick = () => {
 				if (!adventure.enabled || !viewer.walking) return adventure.onMessage('Turn Adventure on and walk on the ground first', true);
 				adventure.use(i + 1);
@@ -150,7 +180,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 
 	// --- Keys: in capture, ahead of the emotes on the number keys and the world map on Tab ---
 	window.addEventListener('keydown', (e) => {
-		if (e.code === 'Escape' && !book.hidden && !isTyping(e)) { book.hidden = true; e.stopImmediatePropagation(); return; }
+		if (e.code === 'Escape' && (!book.hidden || !trainer.hidden) && !isTyping(e)) { book.hidden = trainer.hidden = true; e.stopImmediatePropagation(); return; }
 		if (adventure.enabled && e.code === 'KeyP' && !isTyping(e) && !e.ctrlKey && !e.metaKey && !e.altKey) {
 			e.preventDefault(); e.stopImmediatePropagation(); if (!e.repeat) showBook(); return;
 		}
@@ -284,6 +314,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		void loadIcons();
 		showLog();
 		renderBook();
+		renderTrainer();
 	};
 	adventure.onChange();
 
@@ -295,6 +326,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	const frame = () => {
 		requestAnimationFrame(frame);
 		const shown = adventure.enabled && viewer.walking;
+		if (!trainer.hidden && trainerKey && adventure.trainerProblem(trainerKey)) trainer.hidden = true;
 		hud.hidden = !shown;
 		if (!shown) {
 			if (!dialog.hidden && !adventure.enabled) close();
@@ -322,7 +354,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		$('death-box').hidden = adventure.alive;
 		for (const [i, s] of slots.entries()) {
 			s.button.classList.toggle('active', i === 0 && adventure.autoAttack);
-			s.button.classList.toggle('locked', !!s.ability && s.ability.level > adventure.level);
+			s.button.classList.toggle('locked', !!s.ability && (s.ability.level > adventure.level || !adventure.knows(s.ability)));
 			const left = s.ability ? adventure.cooldownLeft(s.ability) : 0;
 			s.cooldown.hidden = left <= 0.05;
 			s.cooldown.textContent = left > 1.5 ? String(Math.ceil(left)) : '';

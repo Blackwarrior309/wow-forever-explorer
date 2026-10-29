@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CharacterRoster, characterStorage, type CharacterSave } from '../game/characters';
 import type { SpawnInfo } from '../explorer/spawns';
-import { classById, GLOBAL_COOLDOWN, MELEE_RANGE, SWING_TIME, type Ability, type ClassInfo } from '../game/classes';
+import { classById, GLOBAL_COOLDOWN, MELEE_RANGE, POINTS_PER_TIER, SWING_TIME, TALENT_DAMAGE, TALENT_HEALTH, talentPoints, type Ability, type ClassInfo } from '../game/classes';
+import type { TalentInfo, TalentTree } from '../explorer/spells';
 import { QuestBook, type Giver, type Marker, type QuestData } from '../game/quests';
 import { gainXp, hitChance, isElite, killXp, mobStats, playerHealth, playerMana, questXp, sideOf, weaponDamage, type MobStats } from '../game/rules';
 import type { Character, CharacterLook } from './character';
@@ -171,6 +172,12 @@ export class Adventure {
 	onTrainer: (key: string, name: string) => void = () => {};
 	trainers: Record<number, number> = {};
 	private learned = new Set<string>();
+	/** The race's racial abilities that can be used, from the game's data (set by the HUD). */
+	racials: Ability[] = [];
+	/** The class's talent trees, from the game's data (set by the HUD); spending needs them. */
+	talentTrees: TalentTree[] = [];
+	/** Talent ranks bought, by talent ID. */
+	talents: Record<number, number> = {};
 	/** Level, experience, money or the quest log changed. */
 	onChange: () => void = () => {};
 
@@ -210,7 +217,12 @@ export class Adventure {
 	}
 
 	get maxHp(): number {
-		return playerHealth(this.level, this.cls.health);
+		return Math.round(playerHealth(this.level, this.cls.health) * (1 + TALENT_HEALTH * this.talentsSpent));
+	}
+
+	/** Weapon and spell damage with talents and the damage buff up. */
+	private get damageBonus(): number {
+		return (1 + TALENT_DAMAGE * this.talentsSpent) * (1 + (this.now < this.buff.until ? this.buff.damage : 0));
 	}
 
 	get maxPower(): number {
@@ -230,9 +242,62 @@ export class Adventure {
 		return this.now < this.combatUntil;
 	}
 
-	/** Abilities the class has, with whether the level is high enough yet. */
+	/** Abilities the class has, with whether the level is high enough yet, then the race's. */
 	get abilities(): Ability[] {
-		return this.cls.abilities;
+		return [...this.cls.abilities, ...this.racials];
+	}
+
+	// --- Talents --------------------------------------------------------------------------------
+
+	get talentsSpent(): number {
+		return Object.values(this.talents).reduce((a, b) => a + b, 0);
+	}
+
+	get talentPointsLeft(): number {
+		return Math.max(0, talentPoints(this.level) - this.talentsSpent);
+	}
+
+	/** Points spent in a tree. */
+	spentIn(tree: TalentTree): number {
+		return tree.talents.reduce((sum, t) => sum + (this.talents[t.id] ?? 0), 0);
+	}
+
+	private findTalent(id: number): { tree: TalentTree; talent: TalentInfo } | null {
+		for (const tree of this.talentTrees) {
+			const talent = tree.talents.find((t) => t.id === id);
+			if (talent) return { tree, talent };
+		}
+		return null;
+	}
+
+	/** Why a point can't go into a talent now, or null if it can. */
+	talentProblem(id: number): string | null {
+		const found = this.findTalent(id);
+		if (!found) return 'Unknown talent';
+		const { tree, talent } = found;
+		if ((this.talents[id] ?? 0) >= talent.ranks.length) return 'Already at the highest rank';
+		if (talent.tier * POINTS_PER_TIER > this.spentIn(tree)) return `Requires ${talent.tier * POINTS_PER_TIER} points in ${tree.name}`;
+		const need = talent.requires && this.findTalent(talent.requires.talent);
+		if (need && (this.talents[need.talent.id] ?? 0) < talent.requires!.rank) return `Requires ${talent.requires!.rank} points in ${need.talent.name}`;
+		if (!this.talentPointsLeft) return this.level < 10 ? 'Talents become available at level 10' : 'No talent points left';
+		return null;
+	}
+
+	learnTalent(id: number): void {
+		const why = this.talentProblem(id);
+		if (why) return this.onMessage(why, true);
+		this.talents[id] = (this.talents[id] ?? 0) + 1;
+		this.hp = Math.min(this.hp, this.maxHp);
+		this.save();
+		this.onChange();
+	}
+
+	resetTalents(): void {
+		if (this.inCombat) return this.onMessage('You cannot do that in combat', true);
+		this.talents = {};
+		this.hp = Math.min(this.hp, this.maxHp);
+		this.save();
+		this.onChange();
 	}
 
 	cooldownLeft(ability: Ability): number {
@@ -258,6 +323,8 @@ export class Adventure {
 			this.xp = Math.max(0, s.xp || 0);
 			this.money = Math.max(0, s.money || 0);
 		}
+		this.talents = {};
+		for (const [id, rank] of Object.entries(s?.talents ?? {})) if (Number.isInteger(rank) && rank > 0) this.talents[Number(id)] = rank;
 		this.hp = this.maxHp;
 		this.power = this.cls.resource === 'rage' ? 0 : this.maxPower;
 		// Existing saves keep abilities they could already use before training was introduced.
@@ -265,7 +332,7 @@ export class Adventure {
 	}
 
 	save(): void {
-		const s: Saved = { cls: this.cls.id, level: this.level, xp: this.xp, money: this.money, learned: [...this.learned], look: this.world.look?.(), quests: this.quests?.snapshot() ?? this.saved?.quests ?? { active: [], done: [], bag: {} } };
+		const s: Saved = { cls: this.cls.id, level: this.level, xp: this.xp, money: this.money, learned: [...this.learned], talents: { ...this.talents }, look: this.world.look?.(), quests: this.quests?.snapshot() ?? this.saved?.quests ?? { active: [], done: [], bag: {} } };
 		this.saved = s;
 		this.roster.update(this.name, s);
 	}
@@ -279,6 +346,7 @@ export class Adventure {
 		this.level = 1;
 		this.xp = 0;
 		this.money = 0;
+		this.talents = {};
 		this.hp = this.maxHp;
 		this.power = this.cls.resource === 'rage' ? 0 : this.maxPower;
 		if (this.quests) this.quests = new QuestBook(this.quests.data);
@@ -442,7 +510,7 @@ export class Adventure {
 		return c ? { displayId: c.displayId, variant: c.variant } : null;
 	}
 
-	knows(a: Ability): boolean { return a.level === 1 || this.learned.has(a.id); }
+	knows(a: Ability): boolean { return a.racial || a.level === 1 || this.learned.has(a.id); }
 	trainingCost(a: Ability): number { return a.level * 10; }
 	trainerProblem(key: string): string | null {
 		if (!this.enabled || !this.world.walker.active) return 'Turn Adventure on and walk on the ground first';
@@ -455,10 +523,10 @@ export class Adventure {
 		return null;
 	}
 	trainingProblem(key: string, ability: Ability): string | null {
-		return this.trainerProblem(key) ?? (!this.abilities.includes(ability) ? 'Wrong class' : this.knows(ability) ? 'Already learned' : ability.level > this.level ? `Requires level ${ability.level}` : this.money < this.trainingCost(ability) ? 'Not enough money' : null);
+		return this.trainerProblem(key) ?? (!this.cls.abilities.includes(ability) ? 'Wrong class' : this.knows(ability) ? 'Already learned' : ability.level > this.level ? `Requires level ${ability.level}` : this.money < this.trainingCost(ability) ? 'Not enough money' : null);
 	}
 	train(key: string, id: string): void {
-		const ability = this.abilities.find((a) => a.id === id);
+		const ability = this.cls.abilities.find((a) => a.id === id);
 		if (!ability) return this.onMessage('Unknown ability', true);
 		const why = this.trainingProblem(key, ability);
 		if (why) return this.onMessage(why, true);
@@ -490,7 +558,7 @@ export class Adventure {
 	use(slot: number): void {
 		if (!this.enabled || !this.alive) return;
 		if (slot === 0) return this.toggleAttack();
-		const ability = this.cls.abilities[slot - 1];
+		const ability = this.abilities[slot - 1];
 		if (!ability) return;
 		const why = this.cannotUse(ability);
 		if (why) return this.onMessage(why, true);
@@ -550,7 +618,7 @@ export class Adventure {
 		this.gcdUntil = Math.max(this.gcdUntil, this.now + (this.cls.resource === 'energy' ? 1 : GLOBAL_COOLDOWN));
 		if (a.cooldown) this.cooldowns.set(a.id, this.now + a.cooldown);
 		this.act(...(a.kind === 'melee' ? ACTIONS.attack : [ACTIONS.cast]));
-		const swing = weaponDamage(this.level) * (1 + (this.now < this.buff.until ? this.buff.damage : 0));
+		const swing = weaponDamage(this.level) * this.damageBonus;
 		const targets = a.aoe ? this.aoeTargets(a.aoe) : a.kind === 'self' ? [] : target ? [target] : [];
 		for (const key of targets) {
 			const mob = this.engage(key);
@@ -720,6 +788,7 @@ export class Adventure {
 			if (this.cls.resource === 'mana') this.power = this.maxPower;
 			this.onMessage(`You have reached level ${this.level}!`);
 			for (const a of this.cls.abilities) if (a.level > this.level - result.levels && a.level <= this.level) this.onMessage(`Your class trainer can teach you ${a.name}`);
+			if (this.level >= 10) this.onMessage(`You have ${this.talentPointsLeft} talent point${this.talentPointsLeft === 1 ? '' : 's'} to spend (N)`);
 		}
 		this.save();
 		this.onChange();
@@ -843,7 +912,7 @@ export class Adventure {
 		this.act(...ACTIONS.attack);
 		if (Math.random() > hitChance(this.level, mob.level)) return this.float(mob.walker.position, mob.height, 'Miss', '#ffffff');
 		const crit = Math.random() < CRIT_CHANCE;
-		const amount = Math.max(1, Math.round(weaponDamage(this.level) * (1 + (this.now < this.buff.until ? this.buff.damage : 0)) * random(0.85, 1.15) * (crit ? 2 : 1)));
+		const amount = Math.max(1, Math.round(weaponDamage(this.level) * this.damageBonus * random(0.85, 1.15) * (crit ? 2 : 1)));
 		this.hitMob(mob, amount, 0, crit);
 	}
 
@@ -998,7 +1067,7 @@ export class Adventure {
 		const round = (v: number) => Math.round(v * 100) / 100;
 		this.net.sendMobs(mine.map((m) => ({
 			k: m.key, e: m.info.entry, l: m.level, hp: Math.round(m.hp), max: m.maxHp,
-			p: [round(m.walker.position.x), round(m.walker.position.y), round(m.walker.position.z)], f: round(m.walker.facing),
+			m: -1, p: [round(m.walker.position.x), round(m.walker.position.y), round(m.walker.position.z)], f: round(m.walker.facing),
 			s: m.state === 'combat' ? 0 : m.state === 'evade' ? 1 : 2, t: m.target === 'me' ? this.net!.me : m.target, w: m.swings,
 		})));
 	}

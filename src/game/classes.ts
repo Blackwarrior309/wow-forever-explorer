@@ -8,8 +8,8 @@ export type Resource = 'rage' | 'energy' | 'mana';
 export interface Ability {
 	id: string;
 	name: string;
-	/** Interface/Icons file, without extension. */
-	icon: string;
+	/** Interface/Icons file, without extension; or an icon's file ID (abilities read from the game's data). */
+	icon: string | number;
 	level: number;
 	/** 'melee' needs the target within reach, 'ranged' within range yards, 'self' no target. */
 	kind: 'melee' | 'ranged' | 'self';
@@ -38,6 +38,10 @@ export interface Ability {
 	drain?: boolean;
 	/** Usable only on a target below this share of health. */
 	execute?: number;
+	/** A racial ability: known from the start, not taught by trainers. */
+	racial?: boolean;
+	/** The game's own description, when the ability comes from its data. */
+	text?: string;
 }
 
 export interface ClassInfo {
@@ -131,3 +135,32 @@ export const MELEE_RANGE = 2.5;
 export const GLOBAL_COOLDOWN = 1.5;
 /** Seconds between a player's automatic melee swings. */
 export const SWING_TIME = 2;
+
+/**
+ * What racial abilities do in Adventure's simple combat, by spell ID; the others (Shadowmeld,
+ * Escape Artist, Will of the Forsaken...) are used but do nothing it has.
+ */
+const RACIAL_EFFECTS: Record<number, Partial<Ability>> = {
+	20549: { aoe: 8, stun: 2, cooldown: 120 }, // War Stomp
+	20554: { buff: { damage: 0.1, duration: 10 }, cooldown: 180 }, // Berserking
+	20572: { buff: { damage: 0.15, duration: 15 }, cooldown: 120 }, // Blood Fury
+	20594: { shield: 0.15, cooldown: 180 }, // Stoneform
+	20577: { hot: { total: 0.35, duration: 10 }, cooldown: 120 }, // Cannibalize
+	1259799: { buff: { damage: 0.1, duration: 15 }, cooldown: 180 }, // Elune's Light: more crits
+	1260270: { hot: { total: 0.1, duration: 6 }, cooldown: 120 }, // Troll regeneration
+	1299026: { shield: 0.1, cooldown: 120 }, // Break Curse: less magic damage
+	1259812: { buff: { damage: 0.1, duration: 8 }, cooldown: 120 }, // Eureka!
+};
+
+/** A racial ability from the game's data as one the player can use (passive ones aren't). */
+export function racialAbility(spell: { spell: number; name: string; icon: number; description: string }): Ability {
+	return { id: `racial-${spell.spell}`, name: spell.name, icon: spell.icon || 'inv_misc_questionmark', level: 1, kind: 'self', cost: 0, cooldown: 120, racial: true, text: spell.description, ...RACIAL_EFFECTS[spell.spell] };
+}
+
+/** Points to spend on talents at a level: one a level from 10. */
+export const talentPoints = (level: number) => Math.max(0, level - 9);
+/** What each talent point spent gives in Adventure's simple combat: more damage and health. */
+export const TALENT_DAMAGE = 0.01;
+export const TALENT_HEALTH = 0.005;
+/** Points to spend in a tree for each row further down. */
+export const POINTS_PER_TIER = 5;

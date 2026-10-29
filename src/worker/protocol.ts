@@ -6,6 +6,7 @@ import type { FootstepSounds, LiquidLooks, LockKind } from '../explorer/clientDb
 import type { MusicData, WmoArea } from '../explorer/music';
 import type { Place } from '../explorer/places';
 import type { WorldMapInfo } from '../explorer/worldMap';
+import type { SpellText, TalentTree } from '../explorer/spells';
 import type { ModelData, ObjectKind, Placement } from '../explorer/objects';
 import type { CharacterModel, FarTile, InstanceMap, LoadedTexture, MapListing, NearTile, TileTexture } from '../explorer/world';
 import type { CharacterOutfit, CharacterRace } from '../explorer/spawns';
@@ -51,6 +52,8 @@ export interface StorageApi {
 	loadImages(fdids: number[]): (Image | null)[];
 	textureOpacity(fdids: number[]): number[];
 	loadWorldMaps(mapIds: number[]): WorldMapInfo[];
+	loadTalents(classId: number): TalentTree[];
+	loadRacials(race: number, classId: number): SpellText[];
 }
 
 export type AsyncStorageApi = {

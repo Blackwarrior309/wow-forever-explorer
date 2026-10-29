@@ -2917,3 +2917,83 @@ body:has(#menu details[open]) #guide-box { visibility: hidden; }
 	white-space: nowrap;
 }
 .aura.ending { animation: hud-pulse 0.5s ease-in-out infinite alternate; }
+
+/* The spellbook and talent frame (bookHud.ts): the game's frames, 384x512, positioned in their pixels. */
+.book-frame {
+	position: fixed;
+	top: calc(var(--bar) + 30px);
+	left: 16px;
+	width: 352px;
+	height: 440px;
+	z-index: 8;
+	color: #fff;
+	font-size: 12px;
+	background: #1b1712;
+	border: 2px solid #6d6150;
+	border-radius: 6px;
+	user-select: none;
+}
+#spellbook-frame:not([hidden]) ~ #talent-frame { left: 400px; }
+.wow-books .book-frame { width: 384px; height: 512px; background: none; border: 0; border-radius: 0; }
+.wow-books #spellbook-frame { background: var(--book-spellbook) 0 0 no-repeat; }
+.wow-books #talent-frame { background: var(--book-talents) 0 0 no-repeat; }
+@media (max-height: 760px) { .book-frame { transform: scale(0.8); transform-origin: top left; } }
+.book-portrait { position: absolute; left: 10px; top: 6px; width: 54px; height: 54px; border-radius: 50%; background: #000 center / cover; }
+.book-title { position: absolute; left: 70px; top: 16px; width: 256px; text-align: center; color: #ffd100; font-size: 13px; text-shadow: 1px 1px 0 #000; }
+.book-close { position: absolute; left: 326px; top: 13px; width: 22px; height: 22px; padding: 0; min-width: 0; line-height: 18px; font-size: 16px; border-radius: 3px; }
+.book-slot { position: absolute; width: 150px; height: 40px; padding: 0 0 0 44px; min-width: 0; text-align: left; background: none; border: 0; color: #ffd100; display: flex; flex-direction: column; justify-content: center; }
+/* Past the themed buttons' rule (an ID in its :not() makes it outrank class rules). */
+.wow-ui #spellbook-frame :is(.book-slot, .book-tab, .book-prev, .book-next), .wow-ui #talent-frame :is(.talent, .talent-tab) { border-image: none; border-width: 0; border-radius: 0; }
+.wow-ui #spellbook-frame .book-slot { padding: 0 0 0 44px; }
+.wow-ui #spellbook-frame :is(.book-tab, .book-prev, .book-next), .wow-ui #talent-frame .talent { padding: 0; }
+.wow-ui #talent-frame .talent-tab { padding: 4px 14px 0; }
+.book-slot .icon { position: absolute; left: 0; top: 1px; width: 37px; height: 37px; background: #111 center / cover; border: 1px solid #000; box-shadow: 0 0 0 1px #8a7a5a; }
+.book-slot:hover .icon { box-shadow: 0 0 0 2px #ffd100; }
+.book-slot .name { font-size: 13px; text-shadow: 1px 1px 0 #000, 0 0 3px #000; line-height: 1.1; }
+.book-slot .sub { font-size: 11px; color: #3b2a14; }
+.book-slot.locked .icon { filter: grayscale(1) brightness(0.7); }
+.book-slot.locked .name { color: #9a9a9a; }
+.book-slot.passive .icon { border-radius: 50%; }
+.book-page { position: absolute; left: 140px; top: 418px; width: 80px; text-align: center; color: #3b2a14; }
+.book-prev, .book-next { position: absolute; top: 406px; width: 32px; height: 32px; padding: 0; min-width: 0; border: 0; background: #0008 center / 100% 100% no-repeat; }
+.book-prev { left: 90px; }
+.book-next { left: 236px; }
+.wow-books .book-prev { background-image: var(--book-prev); background-color: transparent; }
+.wow-books .book-next { background-image: var(--book-next); background-color: transparent; }
+.book-prev:disabled, .book-next:disabled { filter: grayscale(1) brightness(0.6); }
+.book-tabs { position: absolute; left: 346px; top: 66px; display: flex; flex-direction: column; gap: 6px; }
+.book-tab { position: relative; width: 64px; height: 44px; padding: 0; min-width: 0; border: 0; background: #2a2418; }
+.wow-books .book-tab { background: var(--book-tab) 0 0 / 64px 64px no-repeat; height: 44px; }
+.book-tab span { position: absolute; left: 6px; top: 7px; width: 28px; height: 28px; background: center / cover; }
+.book-tab.active span, .book-tab:hover span { box-shadow: 0 0 0 2px #ffd100; }
+
+.talent-band { position: absolute; left: 70px; top: 42px; width: 268px; display: flex; justify-content: space-between; color: #ffd100; text-shadow: 1px 1px 0 #000; }
+.talent-band .left { color: #1eff00; }
+.talent-reset { position: absolute; left: 318px; top: 440px; height: 22px; padding: 0 8px; min-width: 0; font-size: 11px; }
+.talent-area { position: absolute; left: 14px; top: 72px; width: 332px; height: 360px; background: #000 center / cover; overflow: hidden; }
+.talent { position: absolute; width: 37px; height: 37px; padding: 0; min-width: 0; border: 1px solid #000; background: #111 center / cover; box-shadow: 0 0 0 2px #1eff00; }
+.talent.max { box-shadow: 0 0 0 2px #ffd100; }
+.talent.locked { box-shadow: 0 0 0 2px #5a5a5a; filter: grayscale(1) brightness(0.75); }
+.talent:hover { filter: brightness(1.25); }
+.talent .rank { position: absolute; left: 22px; top: 22px; width: 32px; height: 32px; line-height: 32px; text-align: center; font-size: 11px; color: #1eff00; background: var(--book-rank) 0 0 / 32px 32px no-repeat; text-shadow: 1px 1px 0 #000; }
+.talent.max .rank { color: #ffd100; }
+.talent.locked .rank { color: #aaa; }
+.talent-branch { position: absolute; background: #6e6e6e; border: 1px solid #111; box-sizing: border-box; }
+.talent-branch.lit { background: #e5c34b; }
+.talent-arrow { position: absolute; width: 32px; height: 32px; background: var(--book-arrows) 0 -32px / 64px 64px no-repeat; }
+.talent-arrow.lit { background-position-y: 0; }
+.talent-arrow.right, .talent-arrow.left { background-position-x: -32px; }
+.talent-arrow.left { transform: scaleX(-1); }
+.talent-tabs { position: absolute; left: 14px; top: 436px; display: flex; gap: 2px; }
+.talent-tab { height: 26px; padding: 0 10px; min-width: 0; font-size: 11px; color: #ffd100; background: #2a2418; border: 1px solid #6d6150; border-radius: 0 0 6px 6px; }
+.wow-books .talent-tab { background: var(--book-inactiveTab) center / 100% 100% no-repeat; border: 0; padding: 4px 14px 0; height: 30px; }
+.wow-books .talent-tab.active { background-image: var(--book-activeTab); color: #fff; }
+.talent-tab.active { color: #fff; }
+
+.book-tip { position: fixed; z-index: 20; width: 290px; padding: 8px 10px; background: rgba(9, 9, 26, 0.92); border: 1px solid #5a5a6a; border-radius: 5px; font-size: 13px; color: #fff; line-height: 1.35; pointer-events: none; white-space: pre-line; }
+.wow-ui .book-tip { border: 5px solid transparent; border-image: var(--wow-tooltip-border) 16 / 16px / 0 round; }
+.book-tip .title { font-size: 15px; }
+.book-tip .sub { color: #fff; }
+.book-tip .next { color: #fff; margin-top: 6px; }
+.book-tip .desc { color: #ffd200; margin-top: 4px; }
+.book-tip .need { color: #ff2020; }

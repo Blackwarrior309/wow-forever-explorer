@@ -818,6 +818,27 @@ export class Viewer {
 		return { mapId: c.mapId, x: p.x / TILE_SIZE - c.offsetX, y: p.y, z: p.z / TILE_SIZE - c.offsetY, yaw, pitch };
 	}
 
+	/**
+	 * A world position in its map's own frame (yards from the map's corner, and height), which
+	 * every game version shares though each lays its maps out in the world differently.
+	 */
+	toShared(p: { x: number; y: number; z: number }): { map: number; p: [number, number, number] } | null {
+		const at = this.terrain.locate(p.x, p.z);
+		if (!at) return null;
+		const c = at.continent;
+		return { map: c.mapId, p: [p.x - c.offsetX * TILE_SIZE, p.y, p.z - c.offsetY * TILE_SIZE] };
+	}
+
+	/** Back from a map's own frame to this world; null while (or if) this version hasn't laid the map out. */
+	fromShared(map: number, p: [number, number, number]): THREE.Vector3 | null {
+		const c = this.continents.find((m) => m.mapId === map) ?? this.loadedInstances.get(map);
+		if (!c) {
+			if (map >= 0) void this.placementFor(map);
+			return null;
+		}
+		return new THREE.Vector3(p[0] + c.offsetX * TILE_SIZE, p[1], p[2] + c.offsetY * TILE_SIZE);
+	}
+
 	/** Where a MapSpot is in this world, its map laid out first if it wasn't; null if this game version hasn't the map. */
 	private async fromMapSpot(spot: MapSpot): Promise<THREE.Vector3 | null> {
 		if (![spot.x, spot.y, spot.z, spot.yaw, spot.pitch].every(Number.isFinite)) return null;
@@ -915,12 +936,13 @@ export class Viewer {
 	playerState(name: string): PlayerState {
 		const w = this.walker;
 		const walking = w.active;
-		const at = walking ? w.position : this.camera.position;
+		const at = this.toShared(walking ? w.position : this.camera.position);
 		return {
 			name,
 			kind: walking ? 'walk' : 'fly',
 			look: this.look,
-			position: [at.x, at.y, at.z],
+			map: at?.map ?? -1,
+			position: at?.p ?? [0, 0, 0],
 			facing: walking ? w.facing : this.controls.yaw,
 			state: walking ? w.state : 'ground',
 			intent: walking ? [w.intent.x, w.intent.y] : [0, 0],

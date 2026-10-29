@@ -122,6 +122,12 @@ const api: AsyncStorageApi = {
 	async loadWorldMaps(mapIds) {
 		return requireWorld().loadWorldMaps(mapIds);
 	},
+	async loadTalents(classId) {
+		return requireWorld().loadTalents(classId);
+	},
+	async loadRacials(race, classId) {
+		return requireWorld().loadRacials(race, classId);
+	},
 };
 
 /** Collects typed-array buffers in a result so they move to the main thread instead of being copied. */

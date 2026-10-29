@@ -2,6 +2,7 @@ import { expect, test, spyOn } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import type { SpawnInfo } from '../src/explorer/spawns';
+import { racialAbility } from '../src/game/classes';
 import { QuestBook, type QuestData } from '../src/game/quests';
 import { Adventure, type AdventureWorld } from '../src/viewer/adventure';
 import type { CombatEvent, MobState } from '../src/viewer/multiplayer';
@@ -212,7 +213,7 @@ test('together: a mob someone else runs takes our hits by message, and their kil
 	const { adventure: a } = world();
 	const sent: CombatEvent[] = [];
 	a.net = { me: 'bbb', sendEvent: (e) => sent.push(e), sendMobs: () => {} };
-	const report: MobState = { k: 'k1', e: 299, l: 1, hp: 50, max: 50, p: [3, 0, 0], f: 0, s: 0, t: 'aaa', w: 0 };
+	const report: MobState = { k: 'k1', e: 299, l: 1, hp: 50, max: 50, m: -1, p: [3, 0, 0], f: 0, s: 0, t: 'aaa', w: 0 };
 	a.receiveMobs('aaa', [report]);
 	expect(a.mobs.get('k1')?.owner).toBe('aaa');
 	a.setTarget('k1');
@@ -259,4 +260,36 @@ test('buffs show on the player with the time they have left, and run out', () =>
 	run(a, 121);
 	expect(a.auras('player')).toEqual([]);
 	expect(a.auras('nobody')).toEqual([]);
+});
+
+test('talents: a point a level from 10, rows open by points in the tree, prerequisites first', () => {
+	const { adventure: a } = world();
+	const talent = (id: number, tier: number, ranks: number, requires: { talent: number; rank: number } | null = null) => ({ id, tier, column: 0, name: `T${id}`, icon: 0, ranks: Array(ranks).fill(''), requires });
+	a.talentTrees = [{ id: 1, name: 'Arms', background: 'WarriorArms', talents: [talent(1, 0, 5), talent(2, 1, 3), talent(3, 2, 1, { talent: 2, rank: 3 })] }];
+	expect(a.talentProblem(1)).toBe('Talents become available at level 10');
+	a.level = 20;
+	const health = a.maxHp;
+	expect(a.talentProblem(2)).toBe('Requires 5 points in Arms');
+	for (let i = 0; i < 5; i++) a.learnTalent(1);
+	expect(a.talentProblem(1)).toBe('Already at the highest rank');
+	expect(a.talentProblem(2)).toBeNull();
+	a.learnTalent(2);
+	a.learnTalent(2);
+	expect(a.talentProblem(3)).toBe('Requires 10 points in Arms');
+	expect(a.talentsSpent).toBe(7);
+	expect(a.talentPointsLeft).toBe(4);
+	expect(a.maxHp).toBeGreaterThan(health);
+	a.resetTalents();
+	expect(a.talentPointsLeft).toBe(11);
+});
+
+test('racial abilities from the game data are known at once and used from their slot', () => {
+	const { adventure: a } = world();
+	a.racials = [racialAbility({ spell: 20572, name: 'Blood Fury', icon: 135726, description: 'More damage.' })];
+	const blood = a.abilities.at(-1)!;
+	expect(blood).toMatchObject({ racial: true, buff: { damage: 0.15, duration: 15 } });
+	expect(a.knows(blood)).toBe(true);
+	a.use(a.abilities.length);
+	expect(a.auras('player').map((x) => x.ability.name)).toContain('Blood Fury');
+	expect(a.cooldownLeft(blood)).toBeGreaterThan(60);
 });

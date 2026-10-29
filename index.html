@@ -190,8 +190,8 @@
 		<details id="guide" name="menu">
 			<summary>Guide</summary>
 			<div class="menu-body panel">
-				<p class="muted small">Follow a RestedXP-style leveling guide: choose its file (a .txt or .lua of guides). It stays in this browser and is never uploaded.</p>
-				<label class="guide-file">Guide file <input type="file" id="guide-file" accept=".txt,.lua,text/plain"></label>
+				<p class="muted small">Follow a RestedXP-style leveling guide: choose its files (.txt or .lua of guides; several at once, such as the addon's own <code>Interface/AddOns/RXPGuides/Guides/forever/*.lua</code> for levels 1–20 with your own guide). They stay in this browser and are never uploaded.</p>
+				<label class="guide-file">Guide files <input type="file" id="guide-file" accept=".txt,.lua,text/plain" multiple></label>
 				<div class="flight-grid">
 					<label for="guide-race">Race</label>
 					<select id="guide-race" class="span"></select>
@@ -211,7 +211,7 @@
 			<summary>Adventure</summary>
 			<div class="menu-body panel">
 				<label class="check"><input type="checkbox" id="adventure-on"> Fight and do quests on foot</label>
-				<p class="muted small">Walk on the ground (<kbd>`</kbd>). Left- or right-click a creature to target it and again to attack, or press <kbd>Tab</kbd> for the nearest; <kbd>1</kbd> attacks, <kbd>2</kbd>–<kbd>7</kbd> use abilities. <kbd>P</kbd> opens the spellbook in Adventure mode. Click quest givers or your class trainer to talk. Right-drag still turns the camera. Characters are saved separately in this browser.</p>
+				<p class="muted small">Walk on the ground (<kbd>`</kbd>). Left- or right-click a creature to target it and again to attack, or press <kbd>Tab</kbd> for the nearest; <kbd>1</kbd> attacks, <kbd>2</kbd>–<kbd>7</kbd> use abilities. <kbd>P</kbd> opens the spellbook and <kbd>N</kbd> the talents in Adventure mode. Click quest givers or your class trainer to talk. Right-drag still turns the camera. Characters are saved separately in this browser.</p>
 				<div class="flight-grid">
 					<label for="character-select">Character</label>
 					<select id="character-select" class="span"></select>
@@ -221,7 +221,7 @@
 					<select id="adventure-class" class="span"></select>
 				</div>
 				<div id="adventure-summary" class="muted small"></div>
-				<button id="spellbook-open">Spellbook (P)</button>
+				<div class="flight-buttons"><button id="spellbook-open">Spellbook (P)</button><button id="talents-open">Talents (N)</button></div>
 				<h3 class="travel-heading">Quest log</h3>
 				<ul id="quest-log" class="small"></ul>
 				<div class="flight-buttons"><button id="adventure-new" title="Create another character without replacing the current one">Create character</button><button id="character-rename">Rename current</button></div>
@@ -231,7 +231,7 @@
 		<details id="together" name="menu">
 			<summary>Together</summary>
 			<div class="menu-body panel">
-				<p class="muted small">Explore with friends who have the same game version: everyone in the same room sees each other, on foot or flying as a visitor. Only your name, look and place are sent, through a public server anyone who knows the room can read.</p>
+				<p class="muted small">Explore with friends, on any game version: everyone in the same room sees each other where both versions have the map, on foot or flying as a visitor. Only your name, look and place are sent, through a public server anyone who knows the room can read.</p>
 				<div class="flight-grid">
 					<label for="together-name">Name</label>
 					<input id="together-name" class="span" maxlength="24" autocomplete="off" spellcheck="false">

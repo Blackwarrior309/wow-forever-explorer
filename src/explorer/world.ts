@@ -10,6 +10,7 @@ import { buildLiquidMeshes, type LiquidMesh } from './liquidMesh';
 import { MusicTables, type MusicData, type WmoArea } from './music';
 import type { MapExplorer } from './maps';
 import { loadWorldMaps, type WorldMapInfo } from './worldMap';
+import { loadRacials, loadTalents, type SpellText, type TalentTree } from './spells';
 import { loadPlaces, type Place } from './places';
 import { KNOWN_MAPS } from './maps';
 import { globalWmoPlacement, globalWmoTiles, loadM2, loadWmo, parsePlacements, type ModelData, type ObjectKind, type Placement } from './objects';
@@ -445,6 +446,16 @@ export class WorldLoader {
 				return null;
 			}
 		}));
+	}
+
+	/** A class's talent trees (see spells.ts). */
+	loadTalents(classId: number): Promise<TalentTree[]> {
+		return loadTalents(this.storage, classId);
+	}
+
+	/** A race's racial abilities for a class (see spells.ts). */
+	loadRacials(race: number, classId: number): Promise<SpellText[]> {
+		return loadRacials(this.storage, race, classId);
 	}
 
 	/** The world map's continents and zones on the continents (see worldMap.ts). */

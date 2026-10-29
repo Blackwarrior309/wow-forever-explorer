@@ -62,13 +62,23 @@ export interface Guide {
 	condition: string;
 	/** Guides to go on to, each with its condition. */
 	next: { name: string; condition: string | null }[];
+	/** Who starts with this guide (the "#defaultfor NightElf" line), if anyone. */
+	defaultFor: string | null;
 	steps: RawStep[];
 }
 
-/** Reads every guide in a file. */
+/**
+ * Reads every guide in a file: guide text as the addon imports it, or the addon's own .lua
+ * files, whose guides sit each in a RegisterGuide([[...]]) call.
+ */
 export function parseGuides(text: string): Guide[] {
+	const blocks = [...text.matchAll(/RegisterGuide\(\s*\[(=*)\[([\s\S]*?)\]\1\]/g)].map((m) => m[2]);
+	return blocks.length ? blocks.flatMap(parseText) : parseText(text);
+}
+
+function parseText(text: string): Guide[] {
 	const guides: Guide[] = [];
-	let header: { group?: string; subgroup?: string; condition?: string; next: Guide['next'] } = { next: [] };
+	let header: { group?: string; subgroup?: string; condition?: string; defaultFor?: string; next: Guide['next'] } = { next: [] };
 	let guide: Guide | null = null;
 	let step: RawStep | null = null;
 	for (const raw of text.split(/\r?\n/)) {
@@ -89,14 +99,29 @@ export function parseGuides(text: string): Guide[] {
 			step.lines.push(line);
 			continue;
 		}
-		if (body.startsWith('#group ')) header.group = body.slice(7);
-		else if (body.startsWith('#subgroup ')) header.subgroup ??= body.slice(10);
+		// Header lines may come before or after the guide's #name.
+		if (body.startsWith('#group ')) {
+			header.group = body.slice(7);
+			if (guide) guide.group = header.group;
+		} else if (body.startsWith('#subgroup ')) {
+			header.subgroup ??= body.slice(10);
+			if (guide) guide.subgroup ||= header.subgroup;
+		}
 		else if (body.startsWith('#name ')) {
-			guide = { name: body.slice(6), group: header.group ?? '', subgroup: header.subgroup ?? '', condition: header.condition ?? '', next: header.next, steps: [] };
+			guide = { name: body.slice(6), group: header.group ?? '', subgroup: header.subgroup ?? '', condition: header.condition ?? '', next: header.next, defaultFor: header.defaultFor ?? null, steps: [] };
 			guides.push(guide);
 		} else if (body.startsWith('#next ')) {
 			for (const n of body.slice(6).split(';')) (guide ?? header).next.push({ name: n.trim().replace(/^.*\\/, ''), condition });
-		} else if (!body && condition) header.condition = condition;
+		} else if (body.startsWith('#defaultfor ')) {
+			const who = body.slice(12).trim();
+			// "#defaultfor None" turns an earlier one off.
+			const value = who === 'None' ? null : who;
+			if (guide) guide.defaultFor = value;
+			else header.defaultFor = value ?? undefined;
+		} else if (!body && condition) {
+			header.condition = condition;
+			if (guide) guide.condition = condition;
+		}
 	}
 	return guides;
 }
@@ -190,17 +215,30 @@ function toStep(guide: string, raw: RawStep, who: Character): RouteStep | null {
 	return step;
 }
 
-/**
- * The route for a character: from the first guide of a group that's theirs (the lowest levels),
- * along each guide's #next to the first that's theirs too, step by step.
- */
-export function route(guides: Guide[], who: Character, group = /Forever Guide/): { names: string[]; steps: RouteStep[] } {
-	const mine = guides.filter((g) => group.test(g.group) && holds(g.condition, who));
+/** The level a guide starts at, from its name ("13-15 Westfall" is 13). */
+const startLevel = (g: Guide) => Number(/^\d+/.exec(g.name)?.[0] ?? 99);
+
+/** A character's guides of a group, one of each name, by the level they start at. */
+export function guidesFor(guides: Guide[], who: Character, group = /Forever Guide/): Guide[] {
 	const byName = new Map<string, Guide>();
-	for (const g of mine) if (!byName.has(g.name)) byName.set(g.name, g);
+	for (const g of guides) if (group.test(g.group) && holds(g.condition, who) && !byName.has(g.name)) byName.set(g.name, g);
+	return [...byName.values()].sort((a, b) => startLevel(a) - startLevel(b));
+}
+
+/**
+ * The route for a character: from a guide (by name), or else from where their race starts
+ * (the guide that's #defaultfor them, or the lowest no other guide leads to), along each
+ * guide's #next to the first that's theirs too, step by step.
+ */
+export function route(guides: Guide[], who: Character, from?: string, group = /Forever Guide/): { names: string[]; steps: RouteStep[] } {
+	const mine = guidesFor(guides, who, group);
+	const byName = new Map(mine.map((g) => [g.name, g]));
+	const nextOf = (g: Guide) => g.next.find((n) => (!n.condition || holds(n.condition, who)) && byName.has(n.name));
+	const led = new Set(mine.map((g) => nextOf(g)?.name));
+	const starts = mine.filter((g) => !led.has(g.name));
 	const names: string[] = [];
 	const steps: RouteStep[] = [];
-	let guide: Guide | undefined = mine[0];
+	let guide: Guide | undefined = (from ? byName.get(from) : undefined) ?? starts.find((g) => g.defaultFor && holds(g.defaultFor, who)) ?? starts[0] ?? mine[0];
 	const seen = new Set<string>();
 	while (guide && !seen.has(guide.name)) {
 		seen.add(guide.name);
@@ -209,7 +247,7 @@ export function route(guides: Guide[], who: Character, group = /Forever Guide/):
 			const step = toStep(guide.name, raw, who);
 			if (step) steps.push(step);
 		}
-		const next: { name: string; condition: string | null } | undefined = guide.next.find((n) => (!n.condition || holds(n.condition, who)) && byName.has(n.name));
+		const next = nextOf(guide);
 		guide = next && byName.get(next.name);
 	}
 	return { names, steps };

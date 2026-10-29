@@ -5,6 +5,7 @@ const walking: PlayerState = {
 	name: 'Thrall',
 	kind: 'walk',
 	look: { race: 2, sex: 0, hd: true, look: 3, outfit: null },
+	map: 1,
 	position: [100.123, -20.5, 3000.987],
 	facing: 1.5,
 	state: 'swim',
@@ -59,10 +60,10 @@ test('combat events and mob reports are checked like states', () => {
 	expect(decodeEvent(JSON.stringify({ t: 'kill', k: 'k1', e: 299, l: 3, x: false, by: ['abc', 7, 'BAD ID'] }))).toEqual({ t: 'kill', k: 'k1', e: 299, l: 3, x: false, by: ['abc'] });
 	expect(decodeEvent(JSON.stringify({ t: 'heal', k: 'k1' }))).toBeNull();
 	const mobs = decodeMobs(JSON.stringify({ mobs: [
-		{ k: 'k1', e: 299, l: 3, hp: 999, max: 50, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 },
+		{ k: 'k1', e: 299, l: 3, hp: 999, max: 50, m: 0, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 },
 		{ k: 'k2', e: 1, l: 1, hp: 1, max: 1, p: [1, 2], f: 0, s: 0, t: '', w: 0 },
 		{ k: 'k3', e: 1, l: 1, hp: 1, max: 1, p: [1, 2, 3], f: 0, s: 7, t: '', w: 0 },
 	] }));
-	expect(mobs).toEqual([{ k: 'k1', e: 299, l: 3, hp: 50, max: 50, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 }]);
+	expect(mobs).toEqual([{ k: 'k1', e: 299, l: 3, hp: 50, max: 50, m: 0, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 }]);
 	expect(decodeMobs('[]')).toBeNull();
 });

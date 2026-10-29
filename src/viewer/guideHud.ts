@@ -1,5 +1,5 @@
 import type { WorldMapInfo } from '../explorer/worldMap';
-import { GUIDE_CLASSES, GUIDE_RACES, parseGuides, route, zoneId, type Character, type RouteStep, type Waypoint } from '../game/guide';
+import { GUIDE_CLASSES, GUIDE_RACES, guidesFor, parseGuides, route, zoneId, type Character, type RouteStep, type Waypoint } from '../game/guide';
 import type { AsyncStorageApi } from '../worker/protocol';
 import type { Viewer } from './viewer';
 
@@ -50,6 +50,8 @@ async function kept(): Promise<string | null> {
 interface Saved {
 	race?: number;
 	cls?: number;
+	/** The guide the route was started from, when chosen rather than the race's own start. */
+	from?: string;
 	step?: number;
 	auto?: boolean;
 	shown?: boolean;
@@ -94,11 +96,12 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 	let steps: RouteStep[] = [];
 	let names: string[] = [];
 	let index = saved.step ?? 0;
+	let from = saved.from;
 	let maps: Promise<WorldMapInfo[]> | null = null;
 	/** Where the step's waypoint is, in WoW coordinates on its map, once worked out. */
 	let target: { mapId: number; x: number; y: number } | null = null;
 
-	const save = () => write({ race: Number(raceSelect.value), cls: Number(classSelect.value), step: index, auto: auto.checked, shown: shown.checked });
+	const save = () => write({ race: Number(raceSelect.value), cls: Number(classSelect.value), from, step: index, auto: auto.checked, shown: shown.checked });
 	const character = (): Character => ({ faction: [2, 5, 6, 8, 9, 10].includes(Number(raceSelect.value)) ? 'Horde' : 'Alliance', race: GUIDE_RACES[Number(raceSelect.value)], cls: GUIDE_CLASSES[Number(classSelect.value)] });
 
 	/** A waypoint in WoW coordinates on its map: straight from world ones, else through the zone's map. */
@@ -126,11 +129,13 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 
 	const build = () => {
 		if (!text) return;
-		const r = route(parseGuides(text), character());
+		const guides = parseGuides(text);
+		const r = route(guides, character(), from);
 		steps = r.steps;
 		names = r.names;
 		index = Math.min(index, Math.max(0, steps.length - 1));
-		guideSelect.replaceChildren(...names.map((n) => new Option(n, n)));
+		// Every guide of the character's, so the route can start from any (Westfall rather than Darkshore, say).
+		guideSelect.replaceChildren(...guidesFor(guides, character()).map((g) => new Option(g.name, g.name)));
 		status.textContent = steps.length ? `${names.length} guides, ${steps.length} steps for a ${raceSelect.selectedOptions[0]?.text} ${classSelect.selectedOptions[0]?.text}.` : 'No guide in that file fits this character.';
 		show();
 	};
@@ -144,7 +149,7 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 			void viewer.setGuidePath([]);
 			return;
 		}
-		guideSelect.value = step.guide;
+		if (guideSelect.value !== step.guide) guideSelect.value = step.guide;
 		$('guide-title').textContent = `${step.guide} · ${index + 1}/${steps.length}`;
 		const lines = $('guide-lines');
 		lines.replaceChildren(...step.text.map((line) => {
@@ -185,10 +190,12 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 
 	// --- Loading the file ---
 	file.addEventListener('change', async () => {
-		const f = file.files?.[0];
-		if (!f) return;
-		text = await f.text();
+		const files = [...(file.files ?? [])];
+		if (!files.length) return;
+		// Several at once: the addon's own guide files (Guides/forever/*.lua) and a bought guide, say.
+		text = (await Promise.all(files.map((f) => f.text()))).join('\n');
 		index = 0;
+		from = undefined;
 		build();
 		void keep(text).catch(() => (status.textContent += ' (Not kept: this browser refused to store it.)'));
 	});
@@ -200,9 +207,17 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 
 	for (const select of [raceSelect, classSelect]) select.addEventListener('change', () => {
 		index = 0;
+		from = undefined;
 		build();
 	});
-	guideSelect.addEventListener('change', () => go(steps.findIndex((s) => s.guide === guideSelect.value)));
+	guideSelect.addEventListener('change', () => {
+		const at = steps.findIndex((s) => s.guide === guideSelect.value);
+		if (at >= 0) return go(at);
+		// A guide off the route: the route starts there instead.
+		from = guideSelect.value;
+		index = 0;
+		build();
+	});
 	auto.addEventListener('change', save);
 	shown.addEventListener('change', show);
 	for (const id of ['guide-prev', 'guide-box-prev']) $(id).addEventListener('click', () => go(index - 1));

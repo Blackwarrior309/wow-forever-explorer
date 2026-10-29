@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { holds, parseGuides, route, segments, zoneId } from '../src/game/guide';
+import { guidesFor, holds, parseGuides, route, segments, zoneId } from '../src/game/guide';
 
 const druid = { faction: 'Alliance' as const, race: 'NightElf', cls: 'Druid' };
 const hunter = { ...druid, cls: 'Hunter' };
@@ -85,4 +85,15 @@ test('zones are found by their English names in any install', () => {
 	expect(zoneId("Un'Goro Crater")).toBe(1449);
 	expect(zoneId('Wetlands')).toBe(1437);
 	expect(zoneId('Nowhere')).toBeNull();
+});
+
+test('the addon\'s .lua guides: each race starts at its own, and a route can start from any guide', () => {
+	const guide = (name: string, extra: string) => `RXPGuides.RegisterGuide([[\n#forever\n<< Alliance\n#name ${name}\n#group RestedXP Forever Guide (A)\n${extra}\nstep\n.accept ${name.length} >> ${name}\n]])\n`;
+	const lua = guide('1-6 Northshire', '#defaultfor Human\n#next 13-15 Westfall') + guide('1-6 Shadowglen', '#defaultfor NightElf\n#next 14-16 Darkshore') + guide('13-15 Westfall', '#next 14-16 Darkshore') + guide('14-16 Darkshore', '');
+	const guides = parseGuides(lua);
+	expect(guides).toHaveLength(4);
+	expect(route(guides, druid).names).toEqual(['1-6 Shadowglen', '14-16 Darkshore']);
+	expect(route(guides, { ...druid, race: 'Human' }).names).toEqual(['1-6 Northshire', '13-15 Westfall', '14-16 Darkshore']);
+	expect(route(guides, druid, '13-15 Westfall').names).toEqual(['13-15 Westfall', '14-16 Darkshore']);
+	expect(guidesFor(guides, druid).map((g) => g.name)).toEqual(['1-6 Northshire', '1-6 Shadowglen', '13-15 Westfall', '14-16 Darkshore']);
 });

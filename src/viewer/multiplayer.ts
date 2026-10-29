@@ -13,7 +13,8 @@ import type { WalkState } from './walkControls';
 /** The public broker the Valheim world viewer uses too; `?mqtt=wss://…` picks another. */
 const DEFAULT_BROKER = 'wss://broker.emqx.io:8084/mqtt';
 /** Bumped when a message changes in a way older pages would misread. */
-const PROTOCOL = 'v2';
+// v3: positions in their map's own frame, so players of different game versions meet.
+const PROTOCOL = 'v3';
 /** Most a state is sent (ms): moving, and while nothing changes, to show it's still there. */
 const SEND_EVERY = 100;
 const HEARTBEAT = 1000;
@@ -40,7 +41,9 @@ export interface PlayerState {
 	name: string;
 	kind: 'walk' | 'fly';
 	look: CharacterLook;
-	/** Feet (walking) or the camera (flying), in the viewer's world space. */
+	/** The map (Map.db2 ID) the position is on; -1 off every map. */
+	map: number;
+	/** Feet (walking) or the camera (flying), in its map's own frame (see Viewer.toShared). */
 	position: [number, number, number];
 	facing: number;
 	state: WalkState;
@@ -111,6 +114,7 @@ export function decodeState(text: string): PlayerState | null {
 		name: playerName(typeof m.n === 'string' ? m.n : ''),
 		kind: m.k,
 		look: { race, sex, hd: l.hd === true, look, outfit },
+		map: whole(m.M, -1, 1e6) ?? -1,
 		position: position as PlayerState['position'],
 		facing,
 		state: STATES.includes(m.s as WalkState) ? (m.s as WalkState) : 'ground',
@@ -135,6 +139,7 @@ export function encodeState(s: PlayerState): string {
 		n: s.name,
 		k: s.kind,
 		l: s.look,
+		M: s.map,
 		p: s.position.map(round),
 		f: round(s.facing),
 		s: s.state,
@@ -192,6 +197,8 @@ export interface MobState {
 	l: number;
 	hp: number;
 	max: number;
+	/** Where it is: on a map (Map.db2 ID, -1 none), in that map's own frame. */
+	m: number;
 	p: [number, number, number];
 	f: number;
 	/** 0 fighting, 1 going home, 2 dead. */
@@ -213,7 +220,7 @@ export function decodeMobs(text: string): MobState[] | null {
 		const e = whole(r.e, 0, 1e7), l = whole(r.l, 0, 100), hp = whole(r.hp, 0, 1e7), max = whole(r.max, 1, 1e7);
 		const f = finite(r.f, 100), s = whole(r.s, 0, 2), w = whole(r.w, 0, 1e9);
 		if (typeof r.k !== 'string' || !KEY.test(r.k) || !p || e === null || l === null || hp === null || max === null || f === null || s === null || w === null) continue;
-		out.push({ k: r.k, e, l, hp: Math.min(hp, max), max, p: p as MobState['p'], f, s: s as MobState['s'], t: typeof r.t === 'string' && (r.t === '' || ID.test(r.t)) ? r.t : '', w });
+		out.push({ k: r.k, e, l, hp: Math.min(hp, max), max, m: whole(r.m, -1, 1e6) ?? -1, p: p as MobState['p'], f, s: s as MobState['s'], t: typeof r.t === 'string' && (r.t === '' || ID.test(r.t)) ? r.t : '', w });
 	}
 	return out;
 }
@@ -233,7 +240,8 @@ export interface RoomHandlers {
  * One room on the broker under `mapexplorer/v2/<realm>/<room>/`: `p/<id>` holds each player's
  * state, and an empty message there (sent on leaving, or by the broker when the page is closed)
  * says they've gone; `e/<id>` carries combat events from a player and `m/<id>` the mobs it runs.
- * The realm keeps game versions apart: world positions only match within one build.
+ * Positions are in their map's own frame, the same in every game version, so the realm can be
+ * shared by all of them; another version's player shows where they are, on a map both have.
  */
 export class MultiplayerRoom {
 	readonly id = Math.random().toString(36).slice(2, 10);

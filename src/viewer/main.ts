@@ -1263,9 +1263,13 @@ function setUpTogether(viewer: Viewer): void {
 	const saved = readSaved<{ name: string; room: string }>(TOGETHER_KEY);
 	if (typeof saved.name === 'string') name.value = saved.name;
 	if (typeof saved.room === 'string') room.value = saved.room;
-	// The version too: world positions only line up between players of the same build.
-	const product = $<HTMLSelectElement>('product');
-	const realm = `${product.value}-${product.selectedOptions[0]?.textContent ?? ''}`;
+	// One realm for every game version: positions go in their map's own frame (see Viewer.toShared).
+	const realm = 'azeroth';
+	/** A position from the room in this world: [x, y, z], or null on a map this version hasn't laid out. */
+	const local = (map: number, p: [number, number, number]): [number, number, number] | null => {
+		const v = viewer.fromShared(map, p);
+		return v ? [v.x, v.y, v.z] : null;
+	};
 	let current: MultiplayerRoom | null = null;
 	let sender = 0;
 	let where = '';
@@ -1300,7 +1304,8 @@ function setUpTogether(viewer: Viewer): void {
 		try {
 			current = await MultiplayerRoom.join(realm, where, {
 				peer: (id, state) => {
-					viewer.remotePlayers?.set(id, state);
+					const position = state && local(state.map, state.position);
+					viewer.remotePlayers?.set(id, state && position ? { ...state, position } : null);
 					if (!state) viewer.adventure?.peerLeft(id);
 					showPlayers();
 				},
@@ -1311,11 +1316,17 @@ function setUpTogether(viewer: Viewer): void {
 					} else status.textContent = s === 'connecting' ? `Connecting to room “${where}”…` : `Not connected${detail ? ` (${detail})` : ''}; trying again…`;
 				},
 				event: (from, event) => viewer.adventure?.receiveEvent(from, event),
-				mobs: (from, mobs) => viewer.adventure?.receiveMobs(from, mobs),
+				mobs: (from, mobs) => viewer.adventure?.receiveMobs(from, mobs.flatMap((m) => {
+					const p = local(m.m, m.p);
+					return p ? [{ ...m, p }] : [];
+				})),
 			});
 			const joined = current;
 			if (viewer.adventure) {
-				viewer.adventure.net = { me: joined.id, sendEvent: (e) => joined.sendEvent(e), sendMobs: (m) => joined.sendMobs(m) };
+				viewer.adventure.net = { me: joined.id, sendEvent: (e) => joined.sendEvent(e), sendMobs: (mobs) => joined.sendMobs(mobs.map((m) => {
+					const at = viewer.toShared({ x: m.p[0], y: m.p[1], z: m.p[2] });
+					return { ...m, m: at?.map ?? -1, p: at?.p ?? m.p };
+				})) };
 			}
 		} catch (e) {
 			status.textContent = `Couldn’t join: ${(e as Error).message}`;

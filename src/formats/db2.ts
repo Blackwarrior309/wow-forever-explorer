@@ -314,3 +314,44 @@ function isZero(bytes: Uint8Array, start: number, length: number): boolean {
 	for (let i = start; i < start + length; i++) if (bytes[i] !== 0) return false;
 	return true;
 }
+
+/**
+ * The strings of a sparse table's records (Spell.db2's subtext, description and aura text),
+ * by record ID, split at their ends; Db2 reads only tables with fixed-size records. Sections
+ * the install can't decrypt read as zeros and give empty strings.
+ */
+export function readSparseStrings(bytes: Uint8Array): Map<number, string[]> {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	// After the magic, version and schema name (WDC5): the header, then one entry per section.
+	let p = 4 + 4 + 128;
+	const u32 = () => {
+		const v = view.getUint32(p, true);
+		p += 4;
+		return v;
+	};
+	// Record count to max ID (9 values), flags and ID index (2 bytes each), total field count to pallet data size (6).
+	p += 9 * 4 + 2 * 2 + 6 * 4;
+	const sectionCount = u32();
+	const sections = [];
+	for (let i = 0; i < sectionCount; i++) {
+		p += 8; // TACT key hash
+		sections.push({ offset: u32(), records: u32(), strings: u32(), end: u32(), idList: u32(), relationship: u32(), offsetMap: u32(), copies: u32() });
+	}
+	const decoder = new TextDecoder();
+	const out = new Map<number, string[]>();
+	for (const s of sections) {
+		if (!s.offsetMap) continue;
+		// After the records: the ID list, the copy table, the offset map, the relationship map and the offset map's IDs.
+		let q = s.end;
+		const ids = Array.from({ length: s.idList / 4 }, (_, i) => view.getUint32(q + i * 4, true));
+		q += s.idList + s.copies * 8;
+		const map = Array.from({ length: s.offsetMap }, (_, i) => [view.getUint32(q + i * 6, true), view.getUint16(q + i * 6 + 4, true)]);
+		q += s.offsetMap * 6 + s.relationship;
+		map.forEach(([offset, size], i) => {
+			if (!size || offset + size > bytes.length) return;
+			const id = view.getUint32(q + i * 4, true) || ids[i];
+			out.set(id, decoder.decode(bytes.subarray(offset, offset + size)).split('\0'));
+		});
+	}
+	return out;
+}

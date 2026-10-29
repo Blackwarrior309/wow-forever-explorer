@@ -8,6 +8,8 @@ export interface CharacterSave {
 	money: number;
 	quests: QuestSave;
 	learned?: string[];
+	/** Talent points spent: ranks by Talent.db2 ID. */
+	talents?: Record<number, number>;
 	look?: CharacterLook;
 }
 export interface CharacterSlot { id: string; name: string; state: CharacterSave }

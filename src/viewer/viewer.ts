@@ -619,6 +619,20 @@ export class Viewer {
 		window.addEventListener('blur', () => this.stopTime());
 		canvas.addEventListener('mousedown', () => (this.pressedWalking = this.walker.active));
 		canvas.addEventListener('click', (e) => this.onClick(e));
+		// Remember the point before walking captures the pointer for right-drag camera steering.
+		let rightPress: MouseEvent | null = null;
+		canvas.addEventListener('mousedown', (e) => {
+			if (e.button === 2 && this.walker.active) rightPress = e;
+		}, { capture: true });
+		window.addEventListener('mouseup', (e) => {
+			if (e.button !== 2) return;
+			const press = rightPress;
+			rightPress = null;
+			if (!press || !this.walker.active || this.walker.wasDrag) return;
+			const hit = this.pickHit(press, true);
+			if (hit && !this.adventure?.click(hit)) this.onSelect(hit.info);
+		});
+		window.addEventListener('blur', () => { rightPress = null; });
 		canvas.addEventListener('mousemove', (e) => this.onHover(e));
 		this.resize();
 	}
@@ -633,14 +647,16 @@ export class Viewer {
 		return this.pickHit(e)?.info ?? null;
 	}
 
-	private pickHit(e: MouseEvent): { info: SpawnInfo; key: string } | null {
+	private pickHit(e: MouseEvent, atPress = false): { info: SpawnInfo; key: string } | null {
 		if (!this.objects) return null;
-		const ndc = this.controls.locked
+		const ndc = this.controls.locked && !atPress
 			? new THREE.Vector2(0, 0)
 			: new THREE.Vector2((e.offsetX / this.canvas.clientWidth) * 2 - 1, -(e.offsetY / this.canvas.clientHeight) * 2 + 1);
 		this.raycaster.setFromCamera(ndc, this.camera);
 		this.raycaster.far = PICK_DISTANCE;
-		return this.objects.pick(this.raycaster);
+		const crowd = this.objects.pick(this.raycaster);
+		const fighting = this.adventure?.enabled ? this.adventure.pick(this.raycaster) : null;
+		return fighting && (!crowd || fighting.distance < crowd.distance) ? fighting : crowd;
 	}
 
 	/** Clicking a creature or object opens its info (releasing the mouse); elsewhere captures the mouse. */

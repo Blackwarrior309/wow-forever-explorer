@@ -62,6 +62,21 @@ const run = (a: Adventure, seconds: number) => {
 	for (let t = 0; t < seconds; t += 0.05) a.update(0.05);
 };
 
+test('a fighting creature remains pickable after leaving the instanced crowd', () => {
+	const { adventure: a, hidden } = world();
+	run(a, 0.3);
+	expect(hidden.has('k1')).toBe(true);
+	const mob = a.mobs.get('k1')!;
+	const origin = mob.walker.position.clone().add(new THREE.Vector3(-5, 0.5, 0));
+	const ray = new THREE.Raycaster(origin, new THREE.Vector3(1, 0, 0), 0, 10);
+	expect(a.pick(ray)?.key).toBe('k1');
+	ray.far = 1;
+	expect(a.pick(ray)).toBeNull();
+	ray.far = 10;
+	mob.state = 'dead';
+	expect(a.pick(ray)).toBeNull();
+});
+
 test('a hostile wolf notices the player, fights, dies and gives experience', () => {
 	const { adventure: a, hidden, player, walker } = world();
 	run(a, 0.3);

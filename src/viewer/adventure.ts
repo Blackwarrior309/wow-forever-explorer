@@ -315,6 +315,20 @@ export class Adventure {
 		this.target = key;
 	}
 
+	/** Fighting creatures have left the instanced crowd; keep them selectable at their drawn position. */
+	pick(raycaster: THREE.Raycaster): { info: SpawnInfo; key: string; distance: number } | null {
+		let best: { info: SpawnInfo; key: string; distance: number } | null = null;
+		for (const mob of this.mobs.values()) {
+			if (!mob.character.group.visible || mob.state === 'dead') continue;
+			const center = mob.walker.position.clone().add(new THREE.Vector3(0, mob.height / 2, 0));
+			const point = raycaster.ray.intersectSphere(new THREE.Sphere(center, Math.max(0.5, mob.height * 0.45)), new THREE.Vector3());
+			if (!point) continue;
+			const distance = point.distanceTo(raycaster.ray.origin);
+			if (distance >= raycaster.near && distance <= raycaster.far && (!best || distance < best.distance)) best = { info: mob.info, key: mob.key, distance };
+		}
+		return best;
+	}
+
 	/** Tab: the nearest living creature that can be fought, after the one targeted now. */
 	tabTarget(): void {
 		const me = this.world.walker.position;

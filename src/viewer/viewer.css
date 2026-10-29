@@ -2884,3 +2884,36 @@ body:has(#menu details[open]) #guide-box { visibility: hidden; }
 .tone-buy, .tone-gold { color: #ffd700; }
 .tone-warn { color: #ff8c00; }
 .guide-file input { max-width: 100%; }
+
+/* Buffs under the player frame, the debuffs the player put on its target under the target frame. */
+.unit-frame .auras {
+	position: absolute;
+	top: 82px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+	width: 160px;
+	z-index: 3;
+}
+#player-frame .auras { left: 106px; }
+#target-frame .auras { left: 7px; }
+.aura {
+	position: relative;
+	width: 24px;
+	height: 24px;
+	margin-bottom: 11px;
+	background: #222 center / cover no-repeat;
+	border: 1px solid #000;
+}
+.aura.debuff { border-color: #cc0000; }
+.aura span {
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	font: 10px/11px 'Arial Narrow', system-ui, sans-serif;
+	color: #ffd200;
+	text-shadow: 1px 1px 0 #000;
+	white-space: nowrap;
+}
+.aura.ending { animation: hud-pulse 0.5s ease-in-out infinite alternate; }

@@ -72,12 +72,22 @@ interface Dot {
 	perTick: number;
 	ticks: number;
 	next: number;
+	ability: Ability;
 }
 
 interface Hot {
 	perTick: number;
 	ticks: number;
 	next: number;
+	ability: Ability;
+}
+
+/** A buff or debuff shown on a unit: the ability behind it, seconds left of how many (Infinity: until used up). */
+export interface Aura {
+	ability: Ability;
+	left: number;
+	total: number;
+	debuff: boolean;
 }
 
 interface Mob {
@@ -100,6 +110,8 @@ interface Mob {
 	swing: number;
 	swings: number;
 	stunUntil: number;
+	/** What stunned it last (for its debuff icon). */
+	stunBy?: Ability;
 	diedAt: number;
 	plate: Plate;
 	/** For mobs others run: where they last reported it. */
@@ -167,7 +179,9 @@ export class Adventure {
 	private gcdUntil = 0;
 	private readonly cooldowns = new Map<string, number>();
 	private combatUntil = -Infinity;
-	private buff = { damage: 0, until: 0 };
+	private buff: { damage: number; until: number; ability?: Ability } = { damage: 0, until: 0 };
+	/** What put the shield up (for its buff icon). */
+	private shieldBy: Ability | null = null;
 	private readonly dots: Dot[] = [];
 	private readonly hots: Hot[] = [];
 	private aggroTimer = 0;
@@ -548,28 +562,58 @@ export class Adventure {
 				} else {
 					const crit = Math.random() < CRIT_CHANCE;
 					const amount = Math.max(1, Math.round(swing * a.damage * random(0.9, 1.1) * (crit ? 1.5 : 1)));
+					if (a.stun) this.stunned(mob, a);
 					this.hitMob(mob, amount, a.stun ?? 0, crit);
 					if (a.drain) this.heal(amount);
 				}
 			} else if (a.stun) {
+				this.stunned(mob, a);
 				this.hitMob(mob, 0, a.stun, false);
 			}
 			if (a.dot) {
 				const ticks = Math.max(1, Math.round(a.dot.duration / DOT_TICK));
 				const existing = this.dots.findIndex((d) => d.key === key && d.perTick > 0);
 				if (existing >= 0) this.dots.splice(existing, 1);
-				this.dots.push({ key, perTick: Math.max(1, Math.round((swing * a.dot.total) / ticks)), ticks, next: this.now + DOT_TICK });
+				this.dots.push({ key, perTick: Math.max(1, Math.round((swing * a.dot.total) / ticks)), ticks, next: this.now + DOT_TICK, ability: a });
 			}
 		}
 		if (a.heal) this.heal(Math.round(this.maxHp * a.heal * random(0.95, 1.05)));
 		if (a.hot) {
 			const ticks = Math.max(1, Math.round(a.hot.duration / DOT_TICK));
-			this.hots.push({ perTick: Math.round((this.maxHp * a.hot.total) / ticks), ticks, next: this.now + DOT_TICK });
+			this.hots.push({ perTick: Math.round((this.maxHp * a.hot.total) / ticks), ticks, next: this.now + DOT_TICK, ability: a });
 		}
-		if (a.shield) this.shield = Math.max(this.shield, Math.round(this.maxHp * a.shield));
-		if (a.buff) this.buff = { damage: a.buff.damage, until: this.now + a.buff.duration };
+		if (a.shield) {
+			this.shield = Math.max(this.shield, Math.round(this.maxHp * a.shield));
+			this.shieldBy = a;
+		}
+		if (a.buff) this.buff = { damage: a.buff.damage, until: this.now + a.buff.duration, ability: a };
 		if (a.kind === 'melee') this.autoAttack = true;
 		if (targets.length) this.combatUntil = this.now + OUT_OF_COMBAT;
+	}
+
+	/** Notes a stun the player put on a mob, for its debuff icon (the owner applies the stun itself). */
+	private stunned(mob: Mob, a: Ability): void {
+		mob.stunBy = a;
+		if (mob.owner !== 'me') mob.stunUntil = Math.max(mob.stunUntil, this.now + (a.stun ?? 0));
+	}
+
+	/** Buffs on the player, or debuffs the player put on a mob (by its key), soonest gone last. */
+	auras(on: 'player' | string): Aura[] {
+		const out: Aura[] = [];
+		const now = this.now;
+		const runs = (ticks: number, next: number) => (ticks - 1) * DOT_TICK + Math.max(0, next - now);
+		if (on === 'player') {
+			const b = this.buff;
+			if (b.ability?.buff && now < b.until) out.push({ ability: b.ability, left: b.until - now, total: b.ability.buff.duration, debuff: false });
+			if (this.shield > 0 && this.shieldBy) out.push({ ability: this.shieldBy, left: Infinity, total: Infinity, debuff: false });
+			for (const h of this.hots) out.push({ ability: h.ability, left: runs(h.ticks, h.next), total: h.ability.hot?.duration ?? 0, debuff: false });
+			return out;
+		}
+		const mob = this.mobs.get(on);
+		if (!mob || mob.state === 'dead') return out;
+		if (mob.stunBy && now < mob.stunUntil) out.push({ ability: mob.stunBy, left: mob.stunUntil - now, total: mob.stunBy.stun ?? 0, debuff: true });
+		for (const d of this.dots) if (d.key === on) out.push({ ability: d.ability, left: runs(d.ticks, d.next), total: d.ability.dot?.duration ?? 0, debuff: true });
+		return out;
 	}
 
 	private heal(amount: number): void {

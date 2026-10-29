@@ -364,6 +364,24 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	const player = $('player-frame');
 	const target = $('target-frame');
 	const castBar = $('cast-bar');
+	const playerAuras = player.querySelector<HTMLElement>('.auras')!;
+	const targetAuras = target.querySelector<HTMLElement>('.auras')!;
+	/** Buff and debuff icons with the time they have left, reusing the elements from the last frame. */
+	const showAuras = (row: HTMLElement, auras: ReturnType<typeof adventure.auras>) => {
+		while (row.children.length > auras.length) row.lastElementChild!.remove();
+		auras.forEach((a, i) => {
+			let cell = row.children[i] as HTMLElement | undefined;
+			if (!cell) row.append((cell = el('div', { className: 'aura' }, el('span'))));
+			const icon = icons.get(a.ability.icon);
+			cell.style.backgroundImage = icon ? `url(${icon})` : '';
+			cell.classList.toggle('debuff', a.debuff);
+			cell.title = `${a.ability.name}${Number.isFinite(a.left) ? ` · ${Math.ceil(a.left)} sec` : ''}`;
+			const left = a.left;
+			// Blinks in its last seconds, as the game's buffs do.
+			cell.classList.toggle('ending', Number.isFinite(left) && left < 5);
+			cell.firstElementChild!.textContent = !Number.isFinite(left) ? '' : left >= 60 ? `${Math.ceil(left / 60)} m` : `${Math.ceil(left)} s`;
+		});
+	};
 	const playerPortrait = player.querySelector<HTMLImageElement>('.portrait')!;
 	const targetPortrait = target.querySelector<HTMLImageElement>('.portrait')!;
 	// Drawn once per look and kept: a 3D portrait takes a moment.
@@ -408,6 +426,8 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 			const look = adventure.targetLook();
 			if (look) portrait(targetPortrait, `c${look.displayId}:${look.variant ?? ''}`, () => viewer.portraits().drawCreature(look.displayId, look.variant, PORTRAIT_SIZE, PORTRAIT_SIZE));
 		}
+		showAuras(playerAuras, adventure.auras('player'));
+		showAuras(targetAuras, t && adventure.target ? adventure.auras(adventure.target) : []);
 		portrait(playerPortrait, `p${JSON.stringify(viewer.look)}`, () => viewer.portraits().draw(viewer.look, PORTRAIT_SIZE, PORTRAIT_SIZE, true));
 		const cast = adventure.cast;
 		castBar.hidden = !cast;

@@ -246,3 +246,17 @@ test('together: a mob we run takes others hits and reports its state', () => {
 	run(a, 0.3);
 	expect(reports.at(-1)?.[0]).toMatchObject({ k: 'k1', hp: mob.hp });
 });
+
+test('buffs show on the player with the time they have left, and run out', () => {
+	const { adventure: a } = world();
+	a.power = 100;
+	a.use(2); // Battle Shout
+	const [shout] = a.auras('player');
+	expect(shout.ability.name).toBe('Battle Shout');
+	expect(shout.debuff).toBe(false);
+	expect(shout.left).toBeCloseTo(120, 0);
+	a.hp = 1e6; // Survives the wolf meanwhile.
+	run(a, 121);
+	expect(a.auras('player')).toEqual([]);
+	expect(a.auras('nobody')).toEqual([]);
+});

@@ -11,6 +11,7 @@
 		"probe": "bun tools/probe.ts",
 		"spawns": "bun tools/buildSpawns.ts",
 		"regions": "bun tools/buildRegions.ts",
+		"game": "bun tools/buildGame.ts",
 		"portable": "bun tools/buildPortable.ts"
 	},
 	"dependencies": {

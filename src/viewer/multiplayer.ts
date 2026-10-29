@@ -152,7 +152,9 @@ export class MultiplayerRoom {
 		const self = new MultiplayerRoom(`mapexplorer/${PROTOCOL}/${roomName(realm)}/${roomName(room)}/p/`, onPeer, onStatus);
 		onStatus('connecting');
 		// Loaded only when someone joins: it's most of a megabyte nobody exploring alone needs.
-		const { connect } = await import('mqtt');
+		const mqtt = await import('mqtt');
+		// The build gets the ES module (named exports); the dev server's pre-bundle of the UMD file has them only on default.
+		const connect = mqtt.connect ?? mqtt.default.connect;
 		const url = new URLSearchParams(location.search).get('mqtt') || DEFAULT_BROKER;
 		const mine = self.base + self.id;
 		const client = connect(url, {

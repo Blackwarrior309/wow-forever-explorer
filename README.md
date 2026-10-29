@@ -2,6 +2,8 @@
 
 Fly over and walk through the World of Warcraft world, drawn from your own game install, and explore it together with friends. Everything is read straight from the game files on your computer; no game files are hosted, uploaded or downloaded.
 
+**Play it in the browser: [https://blackwarrior309.github.io/wow-forever-explorer/](https://blackwarrior309.github.io/wow-forever-explorer/)**
+
 A fork of [Coldensjo/ClassicWowMapExplorer](https://github.com/Coldensjo/ClassicWowMapExplorer) (MIT). This fork adds:
 
 - **WoW Forever (`wowf`)** chosen first when it is installed.
@@ -11,16 +13,15 @@ A fork of [Coldensjo/ClassicWowMapExplorer](https://github.com/Coldensjo/Classic
 
 Built for WoW Classic, with Eastern Kingdoms and Kalimdor loaded as one seamless world.
 
-## Windows
+## In the browser (Windows)
 
-You need **Windows 10 or 11** and **World of Warcraft Classic** installed.
+You need **World of Warcraft Forever** (or Classic) installed and **Chrome** or **Edge**.
 
-1. Download **MapExplorer-portable.zip** from the
-   [latest release](https://github.com/Coldensjo/ClassicWowMapExplorer/releases/latest) and unzip it anywhere.
-2. Run **MapExplorer.exe**. If Windows says *"Windows protected your PC"* (the program isn't signed),
-   click **More info**, then **Run anyway**.
-3. It finds World of Warcraft by itself. If not, click **Choose your World of Warcraft folder** and pick
-   the folder that contains `_classic_`, `_classic_beta_` or `_forever_`. The files never leave your computer.
+1. Open **[https://blackwarrior309.github.io/wow-forever-explorer/](https://blackwarrior309.github.io/wow-forever-explorer/)**.
+2. Click **Choose your World of Warcraft folder** and pick the folder that contains `_forever_`,
+   `_classic_` or `_classic_beta_` (e.g. `F:\World of Warcraft`). The browser calls it an upload, but the
+   files are only read on your computer; nothing leaves it.
+3. Pick the game version (Forever) and click **Explore**.
 
 Fly with **W A S D**, hold **Shift** to go faster. Press **?** for all controls.
 
@@ -30,8 +31,8 @@ Run from source. You need World of Warcraft Classic, Chrome or another Chromium-
 and **[Bun](https://bun.sh)**.
 
 ```sh
-git clone https://github.com/Coldensjo/ClassicWowMapExplorer.git
-cd ClassicWowMapExplorer
+git clone https://github.com/Blackwarrior309/wow-forever-explorer.git
+cd wow-forever-explorer
 bun install
 bun run dev
 ```

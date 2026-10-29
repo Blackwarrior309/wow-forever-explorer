@@ -1,11 +1,10 @@
-# Builds the app and publishes it to GitHub Pages on every push to main or skate: the explorer
-# (main) at the site's root, and the skating game (the skate branch) under skate/.
+# Builds the app and publishes it to GitHub Pages on every push to main.
 # On Pages there is no launcher to find World of Warcraft, so visitors choose its folder themselves.
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, skate]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -19,49 +18,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # The Pages environment takes deployments from main only, so a push to skate has main's
-  # workflow publish the site again (it builds both).
-  redeploy:
-    if: github.ref_name == 'skate'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
   build:
-    if: github.ref_name != 'skate'
     runs-on: ubuntu-latest
     steps:
-      # Both branches, whichever was pushed: the site holds the two together.
       - uses: actions/checkout@v7
-        with:
-          ref: main
-          path: explorer
-      - uses: actions/checkout@v7
-        with:
-          ref: skate
-          path: skate
       - uses: oven-sh/setup-bun@v2
-      - name: Build the explorer
-        working-directory: explorer
-        run: |
-          bun install --frozen-lockfile
-          bun test
-          bun run build
-      - name: Build the skating game
-        working-directory: skate
-        run: |
-          bun install --frozen-lockfile
-          bun test
-          bun run build:skate
-      - run: cp -r skate/dist explorer/dist/skate
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run build
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: explorer/dist
+          path: dist
 
   deploy:
     needs: build

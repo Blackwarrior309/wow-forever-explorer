@@ -1,6 +1,11 @@
-# MapExplorer
+# MapExplorer (Forever edition)
 
-Fly over the World of Warcraft world, drawn from your own game install. Everything is read straight from the game files on your computer; nothing is hosted, uploaded or downloaded.
+Fly over and walk through the World of Warcraft world, drawn from your own game install, and explore it together with friends. Everything is read straight from the game files on your computer; no game files are hosted, uploaded or downloaded.
+
+A fork of [Coldensjo/ClassicWowMapExplorer](https://github.com/Coldensjo/ClassicWowMapExplorer) (MIT). This fork adds:
+
+- **WoW Forever (`wowf`)** chosen first when it is installed.
+- **Together**: in the *Together* menu, enter a name and a room and join. Everyone in the same room, with the same game version, sees each other walk, swim, jump and emote, and anyone flying the free camera shows up as a visitor. Only your name, look and position are sent, a few times a second, through the public MQTT broker `broker.emqx.io` (pick another with `?mqtt=wss://…`). Anyone who knows the room name can read and send there, so don't send anything private.
 
 Built for WoW Classic, with Eastern Kingdoms and Kalimdor loaded as one seamless world.
 
@@ -13,7 +18,7 @@ You need **Windows 10 or 11** and **World of Warcraft Classic** installed.
 2. Run **MapExplorer.exe**. If Windows says *"Windows protected your PC"* (the program isn't signed),
    click **More info**, then **Run anyway**.
 3. It finds World of Warcraft by itself. If not, click **Choose your World of Warcraft folder** and pick
-   the folder that contains `_classic_` or `_classic_beta_`. The files never leave your computer.
+   the folder that contains `_classic_`, `_classic_beta_` or `_forever_`. The files never leave your computer.
 
 Fly with **W A S D**, hold **Shift** to go faster. Press **?** for all controls.
 
@@ -31,7 +36,7 @@ bun run dev
 
 Then open **http://localhost:5173**. It looks for the game in the usual places (Wine, Lutris, Bottles,
 Steam, Heroic on Linux; `/Applications` on macOS). If it can't find it, set `WOW_DIR` to the folder that
-contains `_classic_` or `_classic_beta_`, or choose the folder in the page:
+contains `_classic_`, `_classic_beta_` or `_forever_`, or choose the folder in the page:
 
 ```sh
 WOW_DIR="/path/to/World of Warcraft" bun run dev
@@ -42,7 +47,7 @@ macOS is untested.
 ## Troubleshooting
 
 - **"That isn't the World of Warcraft folder"**: pick the folder one level up, the one that
-  contains `_classic_` or `_classic_beta_`.
+  contains `_classic_`, `_classic_beta_` or `_forever_`.
 - **Nothing shows up**: use Chrome or Edge with hardware acceleration on and an up-to-date graphics driver.
 - **Freezes or stutter**: press **F9** right after one to save a debug log and attach it to the issue.
 

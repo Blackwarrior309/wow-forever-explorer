@@ -43,6 +43,8 @@ export class RootTable {
 		const recFdid: number[] = [];
 		const recCkey: number[] = [];
 		const recHashOff: number[] = [];
+		/** Whether each record is another locale's, kept after enUS (see the sort). */
+		const recOther: boolean[] = [];
 		while (r.remaining > 0) {
 			const count = r.u32();
 			let contentFlags: number;
@@ -66,21 +68,25 @@ export class RootTable {
 			const hashStart = r.pos;
 			if (hasNames) r.skip(count * 8);
 
-			if (!(localeFlags & LOCALE_ENUS) || contentFlags & CONTENT_LOW_VIOLENCE) continue;
+			// Other locales are kept too, behind enUS: an install in another language (deDE) has
+			// only its own variant of localised files such as DB2s stored locally.
+			if (contentFlags & CONTENT_LOW_VIOLENCE) continue;
+			const other = !(localeFlags & LOCALE_ENUS);
 			let fdid = -1;
 			for (let i = 0; i < count; i++) {
 				fdid += r.view.getInt32(idStart + i * 4, true) + 1;
 				recFdid.push(fdid);
 				recCkey.push(ckeyStart + i * 16);
 				recHashOff.push(hasNames ? hashStart + i * 8 : -1);
+				recOther.push(other);
 			}
 		}
 
-		// Sort records by fdid (ties by record order) with a single numeric typed-array sort.
+		// Sort records by fdid (ties enUS first, then by record order) with a single numeric typed-array sort.
 		const n = recFdid.length;
 		if (n >= RECORD_BITS) throw new Error('Root table too large');
 		const order = new Float64Array(n);
-		for (let i = 0; i < n; i++) order[i] = recFdid[i] * RECORD_BITS + i;
+		for (let i = 0; i < n; i++) order[i] = recFdid[i] * RECORD_BITS * 2 + (recOther[i] ? RECORD_BITS : 0) + i;
 		order.sort();
 
 		// Keep every variant of a file (e.g. high-res and standard textures); the storage

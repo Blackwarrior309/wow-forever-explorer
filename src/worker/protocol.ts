@@ -35,6 +35,8 @@ export interface StorageApi {
 	/** The walking character: the races it can be, and one dressed as a look with the clips given. */
 	characterRaces(): CharacterRace[];
 	loadCharacter(race: number, sex: number, hd: boolean, look: number, clips: number[], outfit: CharacterOutfit | null, torch: boolean): CharacterModel | null;
+	/** A creature spawn's look (display ID and held weapons) with the clips given, for one fought up close. */
+	loadCreature(displayId: number, variant: string | undefined, clips: number[]): CharacterModel | null;
 	loadLighting(mapIds: number[]): LightingData;
 	loadAreas(): AreaInfo[];
 	loadMusic(): MusicData;

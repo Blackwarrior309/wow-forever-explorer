@@ -161,6 +161,8 @@ export class WalkControls {
 	/** Whether a mouse button went down on the view (so an uncaptured drag turns the camera). */
 	private dragging = false;
 	active = false;
+	/** Held where it is (dead, in Adventure mode): the movement keys do nothing, the mouse still looks round. */
+	frozen = false;
 	world: WalkWorld | null = null;
 
 	constructor(
@@ -225,7 +227,7 @@ export class WalkControls {
 			this.zoomTarget = THREE.MathUtils.clamp(this.zoomTarget * ZOOM_STEP ** Math.sign(e.deltaY), MIN_ZOOM, MAX_ZOOM);
 		}, { passive: false });
 		window.addEventListener('keydown', (e) => {
-			if (!this.active || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+			if (!this.active || this.frozen || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
 			this.keys.add(e.code);
 			if (e.code === 'Space') e.preventDefault();
 			if ((e.code === 'NumpadDivide' || e.code === 'Backslash') && !e.repeat) this.walkMode = !this.walkMode;
@@ -419,6 +421,7 @@ export class WalkControls {
 
 	/** The way the keys (and mouse buttons) ask to move, relative to the facing; also turns with A/D. */
 	private readInput(dt: number): void {
+		if (this.frozen) this.keys.clear();
 		const k = this.keys;
 		const both = (this.buttons & 3) === 3;
 		let forward = 0;

@@ -354,6 +354,14 @@ export class WorldLoader {
 		return { model, displayId: character.displayId, looks: character.looks };
 	}
 
+	/** A creature spawn's look animated with the clips given (see Character.dressCreature); null when it has none. */
+	async loadCreature(displayId: number, variant: string | undefined, clips: number[]): Promise<CharacterModel | null> {
+		const creature = await this.displays.creature(displayId, parseWeapons(variant));
+		if (!creature) return null;
+		const model = await loadM2(this.storage, creature.fdid, { ...creature.options, clips });
+		return { model, displayId, looks: 1 };
+	}
+
 	/** Renderable geometry for models; null where a model can't be read. */
 	async loadModels(models: { fdid: number; kind: ObjectKind; variant?: string }[]): Promise<(ModelData | null)[]> {
 		return Promise.all(models.map(async ({ fdid, kind, variant }) => {

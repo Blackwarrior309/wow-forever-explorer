@@ -5,7 +5,7 @@ import type { AnimationClip } from '../formats/m2Pose';
 import { ANIM } from '../formats/m2Pose';
 import type { AsyncStorageApi } from '../worker/protocol';
 import type { LoadedEmitter, EmitterSource } from './particles';
-import { EMOTE_CLIPS, isPose, type Emote } from './emotes';
+import { ACTION_CLIPS, EMOTE_CLIPS, isPose, type Emote } from './emotes';
 import { createModelMaterial, createSkinnedDepthMaterial, type SkinUniforms } from './modelMaterials';
 import { useShadows } from './shadows';
 import { TextureCache } from './textureCache';
@@ -27,7 +27,7 @@ const SWIM_TILT_RATE = 4;
 /** Landing after this long in the air (s), standing still, plays JumpEnd. */
 const LAND_AFTER = 0.3;
 /** Every sequence the character plays, sampled into its bone texture: moving about, then the emotes. */
-const CLIPS: number[] = [...Object.values(ANIM), ...EMOTE_CLIPS];
+const CLIPS: number[] = [...new Set([...Object.values(ANIM), ...EMOTE_CLIPS, ...ACTION_CLIPS])];
 /** What to play when a model lacks a sequence: the next that it has, else Stand. */
 const FALLBACK: Partial<Record<number, number[]>> = {
 	[ANIM.Walk]: [ANIM.Run],
@@ -191,7 +191,7 @@ class Animator {
 		if (!e.fresh) {
 			if (e.phase === 'down' && this.ended(emote.down!)) Object.assign(e, { phase: 'play', fresh: true });
 			else if (e.phase === 'up' && this.ended(emote.up!)) this.emoting = null;
-			else if (e.phase === 'play' && once && this.ended(emote.play)) this.emoting = null;
+			else if (e.phase === 'play' && once && !emote.hold && this.ended(emote.play)) this.emoting = null;
 		}
 		if (!this.emoting) return null;
 		const restart = e.fresh;
@@ -390,11 +390,23 @@ export class Character {
 
 	/** Dresses the character as a look, holding a torch if it can; resolves to how many looks its race and sex have, or 0 if it couldn't. */
 	async dress(look: CharacterLook, torch: boolean): Promise<number> {
-		const key = JSON.stringify([look, torch]);
+		return this.wear(JSON.stringify([look, torch]), () => this.storage.loadCharacter(look.race, look.sex, look.hd, look.look, CLIPS, look.outfit, torch));
+	}
+
+	/** Dresses it as a creature spawn's look (a mob being fought), sized as placed; resolves to 1, or 0 if it couldn't. */
+	dressCreature(displayId: number, variant: string | undefined, scale: number): Promise<number> {
+		this.modelScale = scale;
+		return this.wear(JSON.stringify([displayId, variant]), () => this.storage.loadCreature(displayId, variant, CLIPS));
+	}
+
+	/** Size the model is drawn at (creatures have their placement's). */
+	private modelScale = 1;
+
+	private async wear(key: string, load: () => Promise<CharacterModel | null>): Promise<number> {
 		this.wanted = key;
 		let loaded: CharacterModel | null = null;
 		try {
-			loaded = await this.storage.loadCharacter(look.race, look.sex, look.hd, look.look, CLIPS, look.outfit, torch);
+			loaded = await load();
 		} catch (e) {
 			console.warn('Character model unavailable:', e);
 		}
@@ -531,6 +543,12 @@ export class Character {
 		return this.model && this.group.visible ? { matrix: this.model.group.matrix, height: this.model.height } : null;
 	}
 
+	/** Plays the first of these the model has (once, or as the emote says); false if it has none, null while loading. */
+	act(...emotes: Emote[]): boolean | null {
+		if (!this.model) return null;
+		return emotes.some((e) => this.model!.animator.perform(e, false));
+	}
+
 	/** Lets go of the model and its textures and leaves the scene; a load still under way is dropped. */
 	dispose(): void {
 		this.wanted = '';
@@ -557,6 +575,7 @@ export class Character {
 			const tilt = swimTilt(walker, model.animator);
 			this.tilt += (tilt - this.tilt) * (1 - Math.exp(-dt * SWIM_TILT_RATE));
 			model.group.matrix.makeTranslation(walker.position).multiply(MODEL_BASIS).multiply(new THREE.Matrix4().makeRotationZ(yaw));
+			if (this.modelScale !== 1) model.group.matrix.scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale));
 			if (Math.abs(this.tilt) > 1e-3) {
 				// About the middle of the body, around its left-right axis (model y): nose down is positive.
 				const middle = model.height * 0.5;

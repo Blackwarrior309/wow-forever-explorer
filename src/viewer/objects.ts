@@ -683,6 +683,7 @@ export class ObjectManager {
 	}
 
 	private isVisible(entry: ModelEntry, key: string, m: THREE.Matrix4): boolean {
+		if (this.hidden.has(key)) return false;
 		if ((entry.kind === 'creature' || entry.kind === 'object') && this.hiddenKinds.has(entry.kind)) return false;
 		if (entry.kind === 'creature' && this.hiddenKinds.has('spiritHealer') && this.objects.get(key)?.placement.spawn?.spiritHealer) return false;
 		// Buildings are already limited by tile distance.
@@ -1154,15 +1155,54 @@ export class ObjectManager {
 		return offset;
 	}
 
-	/** The creature or game object spawn nearest along a ray, if any. */
-	pick(raycaster: THREE.Raycaster): { info: SpawnInfo; distance: number } | null {
-		let best: { info: SpawnInfo; distance: number } | null = null;
+	/** Creature spawns drawn by someone else for now (a mob being fought, see adventure.ts). */
+	private readonly hidden = new Set<string>();
+
+	/** Leaves a creature spawn out of its instance buffer (no picking, name or walking) while hidden. */
+	setHidden(key: string, hidden: boolean): void {
+		if (hidden === this.hidden.has(key)) return;
+		if (hidden) this.hidden.add(key);
+		else this.hidden.delete(key);
+		for (const part of this.objects.get(key)?.parts ?? []) part.entry.dirty = true;
+	}
+
+	/** A creature spawn by instance key: what it is, where it stands now (moved by its walker) and its look; null once unloaded. */
+	creature(key: string): { info: SpawnInfo; matrix: THREE.Matrix4; displayId: number; variant?: string; height: number } | null {
+		const object = this.objects.get(key);
+		const part = object?.parts.find((p) => p.entry.kind === 'creature');
+		const info = object?.placement.spawn;
+		const matrix = part && part.entry.instances.get(part.key);
+		if (!part || !info || !matrix) return null;
+		return { info, matrix: matrix.clone(), displayId: part.entry.fdid, variant: part.entry.variant, height: part.entry.data?.height ?? 2 };
+	}
+
+	/** Creature spawns drawn within range of a point, nearest first. */
+	creaturesNear(at: THREE.Vector3, range: number): { key: string; info: SpawnInfo; position: THREE.Vector3; distance: number }[] {
+		const out: { key: string; info: SpawnInfo; position: THREE.Vector3; distance: number }[] = [];
+		for (const entry of this.models.values()) {
+			if (entry.kind !== 'creature') continue;
+			for (const key of entry.visible) {
+				const m = entry.instances.get(key);
+				const info = m && this.objects.get(key)?.placement.spawn;
+				if (!m || !info) continue;
+				const position = new THREE.Vector3().setFromMatrixPosition(m);
+				const distance = position.distanceTo(at);
+				if (distance <= range) out.push({ key, info, position, distance });
+			}
+		}
+		return out.sort((a, b) => a.distance - b.distance);
+	}
+
+	/** The creature or game object spawn nearest along a ray, if any, with its instance key. */
+	pick(raycaster: THREE.Raycaster): { info: SpawnInfo; key: string; distance: number } | null {
+		let best: { info: SpawnInfo; key: string; distance: number } | null = null;
 		for (const entry of this.models.values()) {
 			if (!entry.mesh?.visible || (entry.kind !== 'creature' && entry.kind !== 'object')) continue;
 			for (const hit of raycaster.intersectObject(entry.mesh, false)) {
 				if (hit.instanceId === undefined) continue;
-				const info = this.objects.get(entry.drawnKeys[hit.instanceId])?.placement.spawn;
-				if (info && (!best || hit.distance < best.distance)) best = { info, distance: hit.distance };
+				const key = entry.drawnKeys[hit.instanceId];
+				const info = this.objects.get(key)?.placement.spawn;
+				if (info && (!best || hit.distance < best.distance)) best = { info, key, distance: hit.distance };
 				break; // hits are sorted; the first is this model's nearest
 			}
 		}

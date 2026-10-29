@@ -14,6 +14,8 @@ export interface Emote {
 	/** For a pose: the sequences getting into it and out of it. */
 	down?: number;
 	up?: number;
+	/** Played once and then held on its last frame until stopped (dying). */
+	hold?: boolean;
 }
 
 /** Every emote, in the order they're listed. The race models all have these sequences built in. */
@@ -43,6 +45,21 @@ export const EMOTES: Emote[] = [
 	{ key: 'chicken', name: 'Chicken', play: 78 },
 	{ key: 'work', name: 'Work', play: 62, loop: true },
 ];
+
+/**
+ * What fighting plays, through the same machinery as the emotes (see adventure.ts); not on the
+ * Emotes menu. A model lacking an attack plays the next one listed.
+ */
+export const ACTIONS = {
+	attack: [17, 16, 18].map((play) => ({ key: 'attack', name: 'Attack', play })),
+	cast: { key: 'cast', name: 'Cast', play: 53 },
+	precast: { key: 'precast', name: 'Casting', play: 51, loop: true },
+	wound: { key: 'wound', name: 'Wound', play: 9 },
+	death: { key: 'death', name: 'Death', play: 1, hold: true },
+} satisfies Record<string, Emote | Emote[]>;
+
+/** Every action's sequence, sampled with the emotes'. */
+export const ACTION_CLIPS: number[] = Object.values(ACTIONS).flat().map((e) => e.play);
 
 /** Every sequence the emotes play, for the travel form to sample. */
 export const EMOTE_CLIPS: number[] = [...new Set(EMOTES.flatMap((e) => [e.play, e.down, e.up].filter((id): id is number => id !== undefined)))];

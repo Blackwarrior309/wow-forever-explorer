@@ -114,7 +114,7 @@ let installed: ProductInfo[] = [];
 let exploring = false;
 
 /** The Game version menu lists these first, in this order (and so they get Ctrl+1, 2, 3); the rest after. */
-const PRODUCT_ORDER = ['wow_classic_beta', 'wow_classic_era', 'wow'];
+const PRODUCT_ORDER = ['wowf', 'wow_classic_beta', 'wow_classic_era', 'wow'];
 
 /** Ctrl and the number for the nth version in the menu: 1 to 9, then 0; none past the tenth. */
 function versionKey(index: number): string {
@@ -211,7 +211,7 @@ async function useSource(init: SourceInit): Promise<void> {
 		if (requested && !products.some((p) => p.product === requested.product)) throw new Error(`${productName(requested.product)} isn't in this folder`);
 		const saved = requested?.product ?? savedProduct();
 		// The version chosen before, if it's still installed. Otherwise prefer a classic build: the continent file IDs are the classic ones.
-		const preferred = products.find((p) => p.product === saved) ?? products.find((p) => p.product === 'wow_classic_beta') ?? products.find((p) => p.product.startsWith('wow_classic'));
+		const preferred = products.find((p) => p.product === saved) ?? products.find((p) => p.product === 'wowf') ?? products.find((p) => p.product === 'wow_classic_beta') ?? products.find((p) => p.product.startsWith('wow_classic'));
 		if (preferred) {
 			// Nothing to choose: straight in.
 			select.value = preferred.product;

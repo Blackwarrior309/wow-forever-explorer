@@ -11,6 +11,7 @@ const QUICK_KEY = 'mapExplorer.quickSwitch';
 
 /** What each game version is called, by its product code; others go by their code. */
 const PRODUCT_NAMES: Record<string, string> = {
+	wowf: 'Forever',
 	wow_classic_beta: 'Forever',
 	wow_classic_era: 'Classic',
 	wow: 'Retail',

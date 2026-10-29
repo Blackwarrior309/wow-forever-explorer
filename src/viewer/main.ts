@@ -1281,7 +1281,9 @@ function setUpTogether(viewer: Viewer): void {
 		shown = key;
 		list.replaceChildren(...players.map((p) => {
 			const go = Object.assign(document.createElement('button'), { textContent: 'Teleport', title: `Go to ${p.name}` });
-			go.onclick = () => { if (!viewer.teleportTo(p.id)) status.textContent = `${p.name} isn’t anywhere this game version has`; };
+			go.onclick = () => {
+				status.textContent = viewer.teleportTo(p.id) ? `Teleported to ${p.name}` : `${p.name} isn’t anywhere this game version has`;
+			};
 			const li = document.createElement('li');
 			li.append(`${p.label} `, go);
 			return li;

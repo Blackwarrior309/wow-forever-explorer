@@ -221,6 +221,7 @@
 					<select id="adventure-class" class="span"></select>
 				</div>
 				<div id="adventure-summary" class="muted small"></div>
+				<button id="adventure-level-up" title="Go straight to the next level, for trying things out">Level up</button>
 				<div class="flight-buttons"><button id="spellbook-open">Spellbook (P)</button><button id="talents-open">Talents (N)</button></div>
 				<h3 class="travel-heading">Quest log</h3>
 				<ul id="quest-log" class="small"></ul>
@@ -344,6 +345,8 @@
 
 	<!-- Adventure mode: unit frames, action bar, experience, quest tracker, messages, floating numbers. -->
 	<div id="adventure-hud" hidden>
+		<!-- Breath under water, as the game's mirror timer at the top of the screen. -->
+		<div id="breath-bar" hidden><div class="bar"><i></i><b></b></div></div>
 		<!-- As the game lays them out: the player frame top left, the target beside it (see viewer.css). -->
 		<div id="unit-frames">
 			<div id="player-frame" class="unit-frame">

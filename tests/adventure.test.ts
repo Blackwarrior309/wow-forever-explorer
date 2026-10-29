@@ -293,3 +293,28 @@ test('racial abilities from the game data are known at once and used from their 
 	expect(a.auras('player').map((x) => x.ability.name)).toContain('Blood Fury');
 	expect(a.cooldownLeft(blood)).toBeGreaterThan(60);
 });
+
+test('under water the breath runs out, then health, and it comes back at the surface', () => {
+	const { adventure: a } = world(299, 'Young Wolf', { alliance: 'friendly', horde: 'friendly' });
+	let under = true;
+	(a as unknown as { world: AdventureWorld }).world.submerged = () => under;
+	run(a, 59);
+	expect(a.breath).toBeGreaterThan(0);
+	expect(a.hp).toBe(a.maxHp);
+	run(a, 2);
+	expect(a.breath).toBe(0);
+	expect(a.hp).toBeLessThan(a.maxHp);
+	run(a, 30);
+	expect(a.alive).toBe(false);
+	a.release();
+	under = false;
+	run(a, 10);
+	expect(a.breath).toBe(a.maxBreath);
+});
+
+test('level up goes straight to the next level', () => {
+	const { adventure: a } = world();
+	a.levelUp();
+	expect(a.level).toBe(2);
+	expect(a.xp).toBe(0);
+});

@@ -159,8 +159,8 @@ export class RemotePlayers {
 	}
 
 	/** Names of those here, on foot or visiting. */
-	get list(): { name: string; kind: PlayerState['kind'] }[] {
-		return [...this.players.values()].map((p) => ({ name: p.state.name, kind: p.state.kind }));
+	get list(): { id: string; name: string; kind: PlayerState['kind'] }[] {
+		return [...this.players].map(([id, p]) => ({ id, name: p.state.name, kind: p.state.kind }));
 	}
 
 	clear(): void {

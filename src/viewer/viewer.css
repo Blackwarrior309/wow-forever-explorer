@@ -2997,3 +2997,9 @@ body:has(#menu details[open]) #guide-box { visibility: hidden; }
 .book-tip .next { color: #fff; margin-top: 6px; }
 .book-tip .desc { color: #ffd200; margin-top: 4px; }
 .book-tip .need { color: #ff2020; }
+
+/* Breath under water: the game's mirror timer, top middle, in the cast bar's frame. */
+#breath-bar { position: fixed; top: calc(var(--bar) + 70px); left: 50%; transform: translateX(-50%); width: 256px; height: 64px; z-index: 3; }
+#breath-bar .bar { position: absolute; left: 31px; top: 26px; width: 195px; height: 13px; --fill: #0080ff; }
+.wow-hud #breath-bar { background: var(--wow-hud-castbar) 0 0 / 100% 100% no-repeat; }
+#together-players button { margin-left: 6px; padding: 1px 8px; font-size: 11px; }

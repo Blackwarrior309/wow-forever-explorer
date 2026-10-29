@@ -59,7 +59,18 @@ export interface AdventureWorld {
 	female: () => boolean;
 	look?: () => CharacterLook;
 	restoreLook?: (look: CharacterLook) => void;
+	/** Whether the player's head is under water (diving, not swimming at the surface). */
+	submerged?: () => boolean;
 }
+
+/** Seconds of breath under water, as the game gives (four times as long for the undead). */
+const BREATH = 60;
+const UNDEAD_BREATH = 4;
+/** Breath back a second at the surface, seconds. */
+const BREATH_REFILL = 10;
+/** Out of breath: a share of maximum health lost every so many seconds. */
+const DROWN_SHARE = 0.1;
+const DROWN_EVERY = 2;
 
 /** How the page talks to the others in the room (see main.ts); null alone. */
 export interface AdventureNet {
@@ -181,6 +192,9 @@ export class Adventure {
 	/** Level, experience, money or the quest log changed. */
 	onChange: () => void = () => {};
 
+	/** Seconds of breath left under water. */
+	breath = BREATH;
+	private drownTimer = 0;
 	private now = 0;
 	private swingTimer = 0;
 	private gcdUntil = 0;
@@ -223,6 +237,10 @@ export class Adventure {
 	/** Weapon and spell damage with talents and the damage buff up. */
 	private get damageBonus(): number {
 		return (1 + TALENT_DAMAGE * this.talentsSpent) * (1 + (this.now < this.buff.until ? this.buff.damage : 0));
+	}
+
+	get maxBreath(): number {
+		return BREATH * (this.world.race() === 5 ? UNDEAD_BREATH : 1);
 	}
 
 	get maxPower(): number {
@@ -794,6 +812,32 @@ export class Adventure {
 		this.onChange();
 	}
 
+	/** Breath runs out under water, then health, a tenth every two seconds; it comes back at the surface. */
+	private updateBreath(dt: number): void {
+		if (!this.alive || !this.world.walker.active || !this.world.submerged?.()) {
+			this.breath = Math.min(this.maxBreath, this.breath + dt * BREATH_REFILL);
+			this.drownTimer = 0;
+			return;
+		}
+		this.breath = Math.max(0, this.breath - dt);
+		if (this.breath > 0) return;
+		this.drownTimer -= dt;
+		if (this.drownTimer > 0) return;
+		this.drownTimer = DROWN_EVERY;
+		const amount = Math.max(1, Math.round(this.maxHp * DROWN_SHARE));
+		this.hp = Math.max(0, this.hp - amount);
+		this.float(this.world.walker.position, 2, `-${amount}`, '#ff4040');
+		if (this.hp > 0) return;
+		this.die('');
+		this.onMessage('You drowned', true);
+	}
+
+	/** Straight to the next level (for trying things out): the experience it takes, given. */
+	levelUp(): void {
+		if (!this.quests || this.level >= 60) return this.onMessage(this.quests ? 'You are at the highest level' : 'Still loading', true);
+		this.gain(Math.max(1, this.xpNeeded - this.xp), 'Level up!');
+	}
+
 	/** A blow to the player: the shield takes it first. */
 	private damagePlayer(amount: number, from: string): void {
 		if (!this.alive) return;
@@ -840,6 +884,7 @@ export class Adventure {
 			for (const m of this.mobs.values()) if (m.owner === 'me' && m.state === 'combat') m.threat.delete('me');
 		}
 		this.regenerate(dt);
+		this.updateBreath(dt);
 		this.updateCast();
 		this.updateSwing(dt);
 		this.tickDots();
@@ -864,7 +909,8 @@ export class Adventure {
 	private regenerate(dt: number): void {
 		if (!this.alive) return;
 		const resting = !this.inCombat;
-		if (resting) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.04 * dt);
+		// No health back while drowning.
+		if (resting && this.breath > 0) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.04 * dt);
 		const r = this.cls.resource;
 		if (r === 'energy') this.power = Math.min(100, this.power + 10 * dt);
 		else if (r === 'rage') this.power = resting ? Math.max(0, this.power - 2 * dt) : this.power;

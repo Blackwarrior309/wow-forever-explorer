@@ -1275,12 +1275,17 @@ function setUpTogether(viewer: Viewer): void {
 	let where = '';
 	let shown = '';
 	const showPlayers = () => {
-		const players = viewer.remotePlayers?.list ?? [];
-		const names = players.map((p) => (p.kind === 'fly' ? `${p.name} (visitor)` : p.name)).sort();
-		const key = names.join('\n');
+		const players = (viewer.remotePlayers?.list ?? []).map((p) => ({ ...p, label: p.kind === 'fly' ? `${p.name} (visitor)` : p.name })).sort((a, b) => a.label.localeCompare(b.label));
+		const key = players.map((p) => `${p.id} ${p.label}`).join('\n');
 		if (key === shown) return;
 		shown = key;
-		list.replaceChildren(...names.map((n) => Object.assign(document.createElement('li'), { textContent: n })));
+		list.replaceChildren(...players.map((p) => {
+			const go = Object.assign(document.createElement('button'), { textContent: 'Teleport', title: `Go to ${p.name}` });
+			go.onclick = () => { if (!viewer.teleportTo(p.id)) status.textContent = `${p.name} isn’t anywhere this game version has`; };
+			const li = document.createElement('li');
+			li.append(`${p.label} `, go);
+			return li;
+		}));
 		if (current) status.textContent = `In room “${where}”: ${players.length ? `${players.length} here besides you` : 'nobody else here yet'}`;
 	};
 	const reset = () => {

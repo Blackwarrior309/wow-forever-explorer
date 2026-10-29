@@ -376,6 +376,8 @@ function supportsClipControl(): boolean {
 }
 
 /** WoW world coordinates (x north, y west, z up) on a map -> where that map sits in the world. */
+/** How high (yards, at a human's size) the head is over the feet, for being under water. */
+const HEAD_UNDER = 1.6;
 /** A guide waypoint's pillar of light, yards tall. */
 const BEACON_HEIGHT = 400;
 /** The guide's way on the ground: yards wide, above the ground, between samples (at least), most samples, ms between rebuilds, chevrons a second. */
@@ -883,6 +885,27 @@ export class Viewer {
 		return null;
 	}
 
+	/**
+	 * To another player in the room: on foot beside them (dropped from just above, onto whatever
+	 * floor is there) or, flying, the camera just behind and above them.
+	 */
+	teleportTo(id: string): boolean {
+		const other = this.remotePlayers?.player(id);
+		if (!other) return false;
+		const at = other.position.clone();
+		const facing = other.state.facing;
+		if (this.walker.active) {
+			// A step to the side, not inside them.
+			at.x += Math.cos(facing) * 1.5;
+			at.z -= Math.sin(facing) * 1.5;
+			at.y += 1;
+			this.walker.place(at, facing, this.walker.pitch, true);
+		} else {
+			this.controls.set(at.add(new THREE.Vector3(0, 4, 0)), facing, -0.3);
+		}
+		return true;
+	}
+
 	/** Back to flying, the free camera where the walking camera was. */
 	private stopWalking(): void {
 		if (!this.walker.active) return;
@@ -1319,6 +1342,14 @@ export class Viewer {
 			female: () => this.characterLook.sex === 1,
 			look: () => this.look,
 			restoreLook: (look) => { void this.setLook(look); },
+			submerged: () => {
+				const w = this.walker;
+				if (w.state !== 'swim') return false;
+				const head = w.position.clone();
+				head.y += HEAD_UNDER * w.scale;
+				const liquid = this.liquidOver(head);
+				return !!liquid && liquid.surface > head.y;
+			},
 		});
 		// Walking creatures follow the ground.
 		this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);

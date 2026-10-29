@@ -51,6 +51,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	});
 	$('spellbook-open').onclick = () => books.toggleSpellbook();
 	$('talents-open').onclick = () => books.toggleTalents();
+	$('adventure-level-up').onclick = () => adventure.levelUp();
 	const trainer = el('section', { id: 'trainer-dialog', className: 'panel adventure-window', hidden: true, role: 'dialog' });
 	trainer.setAttribute('aria-label', 'Class trainer');
 	const trainerTitle = el('h2');
@@ -367,6 +368,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		});
 	};
 	const floatSpans: HTMLSpanElement[] = [];
+	const breath = $('breath-bar');
 	const frame = () => {
 		requestAnimationFrame(frame);
 		const shown = adventure.enabled && viewer.walking;
@@ -376,6 +378,8 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 			if (!dialog.hidden && !adventure.enabled) close();
 			return;
 		}
+		breath.hidden = adventure.breath >= adventure.maxBreath;
+		if (!breath.hidden) setBar(breath, adventure.breath, adventure.maxBreath, 'Breath');
 		player.querySelector('.unit-name')!.textContent = adventure.name;
 		player.querySelector('.unit-level')!.textContent = String(adventure.level);
 		setBar(player.querySelector('.health')!, adventure.hp, adventure.maxHp, `${Math.round(adventure.hp)} / ${adventure.maxHp}${adventure.shield ? ` (+${Math.round(adventure.shield)})` : ''}`);

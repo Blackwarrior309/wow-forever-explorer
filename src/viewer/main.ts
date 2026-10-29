@@ -239,7 +239,7 @@ function folderProblem(init: SourceInit, error: unknown): string {
 		// The browser's folder dialog leaves out hidden files (.build.info) on macOS and Linux.
 		return `${counts} The browser's folder dialog left out .build.info, a hidden file. Drag the folder onto this page instead.`;
 	}
-	return `${counts} That doesn't look like the World of Warcraft folder: choose the one that contains _classic_ or _classic_beta_ (not that folder itself). Reason: ${reason}`;
+	return `${counts} That doesn't look like the World of Warcraft folder: choose the one that contains _classic_, _classic_beta_ or _forever_ (not that folder itself). Reason: ${reason}`;
 }
 
 /**

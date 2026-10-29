@@ -2349,3 +2349,271 @@ body.wow-ui {
 	margin: 4px 0 0;
 	padding-left: 18px;
 }
+
+/* Adventure mode. */
+#adventure-hud {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 5;
+}
+
+#unit-frames {
+	position: absolute;
+	top: calc(var(--bar) + 8px);
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	gap: 12px;
+}
+
+.unit-frame {
+	width: 220px;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 6px 8px;
+}
+
+.unit-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.unit-level {
+	color: var(--accent);
+}
+
+#adventure-hud .bar {
+	position: relative;
+	height: 14px;
+	margin-top: 4px;
+	background: #1b1f25;
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+#adventure-hud .bar i {
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 0;
+	background: #2fa83b;
+	transition: width 0.15s linear;
+}
+
+#adventure-hud .bar b {
+	position: relative;
+	display: block;
+	text-align: center;
+	font-size: 11px;
+	line-height: 14px;
+	font-weight: 600;
+	text-shadow: 0 1px 2px #000;
+	font-variant-numeric: tabular-nums;
+}
+
+#adventure-hud .bar.power.mana i { background: #2f5fd0; }
+#adventure-hud .bar.power.rage i { background: #c0302a; }
+#adventure-hud .bar.power.energy i { background: #d8c02a; }
+#target-frame.hostile .bar.health i { background: #c0302a; }
+#target-frame.neutral .bar.health i { background: #c8a52a; }
+
+#adventure-bottom {
+	position: absolute;
+	bottom: 14px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: min(560px, calc(100vw - 24px));
+}
+
+#cast-bar {
+	width: 260px;
+}
+
+#cast-bar i {
+	background: #d9a441 !important;
+}
+
+#xp-bar {
+	width: 100%;
+	height: 10px !important;
+}
+
+#xp-bar i {
+	background: #8a46c8 !important;
+}
+
+#xp-bar b {
+	line-height: 10px !important;
+	font-size: 9px !important;
+}
+
+#action-bar {
+	display: flex;
+	gap: 4px;
+	pointer-events: auto;
+}
+
+#action-bar button {
+	position: relative;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	background: #1b1f25 center / cover no-repeat;
+	color: var(--text);
+	font-size: 10px;
+	overflow: hidden;
+}
+
+#action-bar button.locked {
+	filter: grayscale(1) brightness(0.5);
+}
+
+#action-bar button.active {
+	border-color: var(--accent);
+	box-shadow: 0 0 6px var(--accent);
+}
+
+#action-bar button .key {
+	position: absolute;
+	top: 1px;
+	right: 3px;
+	font-size: 11px;
+	font-weight: 700;
+	text-shadow: 0 1px 2px #000;
+}
+
+#action-bar button .label {
+	position: absolute;
+	inset: auto 2px 2px;
+	line-height: 1.1;
+	text-shadow: 0 1px 2px #000;
+}
+
+#action-bar button .cooldown {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.6);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+	font-weight: 700;
+}
+
+#adventure-messages {
+	position: absolute;
+	top: 22%;
+	left: 50%;
+	transform: translateX(-50%);
+	text-align: center;
+	font-size: 16px;
+	font-weight: 600;
+	text-shadow: 0 1px 3px #000;
+	color: #ffd200;
+}
+
+#adventure-messages .error {
+	color: #ff3030;
+}
+
+#adventure-messages div {
+	transition: opacity 0.6s;
+}
+
+#floats span {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	font-size: 18px;
+	font-weight: 800;
+	text-shadow: 0 1px 3px #000;
+	white-space: nowrap;
+}
+
+#quest-tracker {
+	position: absolute;
+	right: 12px;
+	bottom: 90px;
+	max-width: 280px;
+	font-size: 12px;
+	text-shadow: 0 1px 2px #000;
+}
+
+#quest-tracker h4 {
+	margin: 6px 0 0;
+	color: #ffd200;
+	font-size: 13px;
+}
+
+#quest-tracker .done {
+	color: var(--muted);
+}
+
+#death-box {
+	position: absolute;
+	top: 35%;
+	left: 50%;
+	transform: translateX(-50%);
+	text-align: center;
+	pointer-events: auto;
+}
+
+#quest-dialog {
+	position: fixed;
+	top: calc(var(--bar) + 60px);
+	left: 16px;
+	width: min(400px, calc(100vw - 32px));
+	max-height: calc(100vh - var(--bar) - 90px);
+	overflow-y: auto;
+	z-index: 6;
+}
+
+#quest-dialog .quest-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+#quest-dialog h2 {
+	font-size: 16px;
+	margin: 4px 0;
+	color: #ffd200;
+}
+
+#quest-dialog h3 {
+	font-size: 13px;
+	margin: 10px 0 2px;
+	color: #ffd200;
+}
+
+#quest-dialog p {
+	white-space: pre-line;
+	margin: 4px 0;
+}
+
+#quest-dialog .quest-list button {
+	display: block;
+	width: 100%;
+	text-align: left;
+	margin: 2px 0;
+}
+
+#quest-log li {
+	margin: 4px 0;
+}
+
+#quest-log button {
+	margin-left: 6px;
+	font-size: 11px;
+}

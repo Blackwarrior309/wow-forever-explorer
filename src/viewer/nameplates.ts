@@ -13,6 +13,8 @@ export interface Plate {
 	height: number;
 	/** In line of sight from the camera (not behind terrain or a building). */
 	visible?: boolean;
+	/** A quest giver's mark over the name: quests to take (!), to hand in (?), under way (…). */
+	marker?: '!' | '?' | '…' | null;
 }
 
 /** The scene's depth as the post pass left it, for names to be hidden by what's in front of them. */
@@ -147,12 +149,12 @@ export class Nameplates {
 	}
 
 	/** Draws the name (and title) into the label's picture at the given font size, if it isn't already. */
-	private paint(label: Label, name: string, sub: string, reaction: Reaction, fontPx: number): void {
+	private paint(label: Label, name: string, sub: string, reaction: Reaction, fontPx: number, marker: Plate['marker'] = null): void {
 		// The game's font arrives after the first names may have been drawn; they're drawn again in it.
-		const key = `${name}\n${sub}\n${reaction}\n${fontPx}\n${document.fonts.size}`;
+		const key = `${name}\n${sub}\n${reaction}\n${fontPx}\n${document.fonts.size}\n${marker ?? ''}`;
 		if (label.key === key) return;
 		label.key = key;
-		const lines = sub ? [name, sub] : [name];
+		const lines = [...(marker ? [marker === '…' ? '?' : marker] : []), name, ...(sub ? [sub] : [])];
 		const ctx = label.canvas.getContext('2d')!;
 		const font = `400 ${fontPx}px ${FONT_FAMILY}`;
 		ctx.font = font;
@@ -169,7 +171,16 @@ export class Nameplates {
 		ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
 		ctx.shadowOffsetX = ctx.shadowOffsetY = fontPx * 0.04;
 		ctx.shadowBlur = fontPx * 0.08;
-		lines.forEach((line, i) => ctx.fillText(line, label.canvas.width / 2, pad + lineHeight * (i + 0.5)));
+		lines.forEach((line, i) => {
+			// The quest mark: gold, or grey for quests under way, bold and a little larger.
+			if (marker && i === 0) {
+				ctx.save();
+				ctx.fillStyle = marker === '…' ? '#a8a8a8' : '#ffd200';
+				ctx.font = `700 ${Math.round(fontPx * 1.3)}px ${FONT_FAMILY}`;
+				ctx.fillText(line, label.canvas.width / 2, pad + lineHeight * (i + 0.5));
+				ctx.restore();
+			} else ctx.fillText(line, label.canvas.width / 2, pad + lineHeight * (i + 0.5));
+		});
 		label.fontPx = fontPx;
 		label.pad = pad;
 		// A new texture each time: three can't change the size of one it has uploaded.
@@ -223,7 +234,7 @@ export class Nameplates {
 			const devicePx = px * ratio;
 			const fontPx = Math.min(PICTURE_MAX_PX, Math.max(PICTURE_MIN_PX, Math.round(2 ** (Math.ceil(Math.log2(devicePx) * STEPS_PER_OCTAVE) / STEPS_PER_OCTAVE))));
 			const reaction: Reaction = plate.info.reaction?.[side] ?? 'neutral';
-			this.paint(label, plate.info.name, plate.info.subname ? `<${plate.info.subname}>` : '', reaction, fontPx);
+			this.paint(label, plate.info.name, plate.info.subname ? `<${plate.info.subname}>` : '', reaction, fontPx, plate.marker);
 			// Centred over the head, the text's bottom on it; whole pixels, so it's sharp at its own size.
 			const scale = devicePx / label.fontPx;
 			const w = label.canvas.width * scale;

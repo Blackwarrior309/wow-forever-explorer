@@ -24,6 +24,7 @@ import { setVolume, volumeSetting, type VolumeChannel } from './volume';
 import { WorldMap } from './worldMap';
 import { setHeard } from './audioOut';
 import { readEnabled as soundSaved } from './music';
+import { setUpAdventure } from './adventureHud';
 import { MultiplayerRoom, playerName, roomName } from './multiplayer';
 import { keptVersions, productName, sessionHost, setKeptVersions, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
 
@@ -514,6 +515,7 @@ async function explore(): Promise<void> {
 		setUpWalking(viewer);
 		setUpEmotes(viewer);
 		setUpTogether(viewer);
+		setUpAdventure(viewer, storage);
 		setUpSound(viewer);
 		setUpHelp();
 		// And on foot, the character where it stood, once its look is set.
@@ -1277,6 +1279,7 @@ function setUpTogether(viewer: Viewer): void {
 	const reset = () => {
 		clearInterval(sender);
 		current = null;
+		if (viewer.adventure) viewer.adventure.net = null;
 		viewer.remotePlayers?.clear();
 		shown = '';
 		showPlayers();
@@ -1292,20 +1295,26 @@ function setUpTogether(viewer: Viewer): void {
 		save(TOGETHER_KEY, { name: me, room: where });
 		join.disabled = name.disabled = room.disabled = true;
 		try {
-			current = await MultiplayerRoom.join(
-				realm,
-				where,
-				(id, state) => {
+			current = await MultiplayerRoom.join(realm, where, {
+				peer: (id, state) => {
 					viewer.remotePlayers?.set(id, state);
+					if (!state) viewer.adventure?.peerLeft(id);
 					showPlayers();
 				},
-				(s, detail) => {
+				status: (s, detail) => {
 					if (s === 'connected') {
 						shown = '\0';
 						showPlayers();
 					} else status.textContent = s === 'connecting' ? `Connecting to room “${where}”…` : `Not connected${detail ? ` (${detail})` : ''}; trying again…`;
 				},
-			);
+				event: (from, event) => viewer.adventure?.receiveEvent(from, event),
+				mobs: (from, mobs) => viewer.adventure?.receiveMobs(from, mobs),
+			});
+			const joined = current;
+			if (viewer.adventure) {
+				viewer.adventure.name = me;
+				viewer.adventure.net = { me: joined.id, sendEvent: (e) => joined.sendEvent(e), sendMobs: (m) => joined.sendMobs(m) };
+			}
 		} catch (e) {
 			status.textContent = `Couldn’t join: ${(e as Error).message}`;
 			reset();

@@ -7,6 +7,8 @@ A fork of [Coldensjo/ClassicWowMapExplorer](https://github.com/Coldensjo/Classic
 - **WoW Forever (`wowf`)** chosen first when it is installed.
 - **Together**: in the *Together* menu, enter a name and a room and join. Everyone in the same room, with the same game version, sees each other walk, swim, jump and emote, and anyone flying the free camera shows up as a visitor. Only your name, look and position are sent, a few times a second, through the public MQTT broker `broker.emqx.io` (pick another with `?mqtt=wss://…`). Anyone who knows the room name can read and send there, so don't send anything private.
 
+- **Adventure**: turn it on in the *Adventure* menu and walk. Pick a class (all nine vanilla ones, a handful of abilities each), fight creatures with their VMaNGOS health and damage, gain experience and levels, and take, do and hand in the 4,000-odd vanilla quests (kill, collect, use). Together, everyone in the room fights the same mobs: each is run by whoever pulled it, the others' hits are sent to them. Your character is kept in your browser. `bun run game -- path/to/data` rebuilds `public/game` from VMaNGOS tables.
+
 Built for WoW Classic, with Eastern Kingdoms and Kalimdor loaded as one seamless world.
 
 ## Windows

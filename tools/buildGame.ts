@@ -25,14 +25,18 @@ const text = (v: string | undefined) => (v ?? '').replace(/\\n/g, '\n');
 
 // Creatures: what combat needs that the spawn files don't carry.
 const creatures: Record<number, number[]> = {};
+const creatureNames = new Map<number, string>();
 for (const c of table('creature_templates')) {
+	creatureNames.set(num(c.entry), c.name);
 	// [health min, max, damage min, max, attack ms, aggro range, rank]
 	creatures[num(c.entry)] = [num(c.health_min), num(c.health_max), num(c.dmg_min), num(c.dmg_max), num(c.attack_time), num(c.detection_range), num(c.rank)];
 }
 
 // Quest items and what drops them (loot rows flagged as quest drops).
 const gameobjectLoot = new Map<number, number[]>();
+const objectNames = new Map<number, string>();
 for (const o of table('gameobject_templates')) {
+	objectNames.set(num(o.entry), o.name);
 	const loot = num(o.loot_id);
 	if (loot) gameobjectLoot.set(loot, [...(gameobjectLoot.get(loot) ?? []), num(o.entry)]);
 }
@@ -85,9 +89,16 @@ for (const r of table('quest_relations')) {
 const items: Record<number, string> = {};
 for (const i of table('items')) if (itemIds.has(num(i.entry))) items[num(i.entry)] = i.name;
 
+// Names of what quests ask to kill or use, for the quest log.
+const names: { c: Record<number, string>; o: Record<number, string> } = { c: {}, o: {} };
+for (const q of Object.values(quests)) {
+	for (const [entry] of q.kill) names.c[entry] = creatureNames.get(entry) ?? '';
+	for (const [entry] of q.use) names.o[entry] = objectNames.get(entry) ?? '';
+}
+
 const xp = table('xp_for_level').map((r) => num(r.xp));
 
 mkdirSync(OUT, { recursive: true });
 writeFileSync(join(OUT, 'creatures.json'), JSON.stringify(creatures));
-writeFileSync(join(OUT, 'quests.json'), JSON.stringify({ xp, quests, starts, ends, drops, items }));
+writeFileSync(join(OUT, 'quests.json'), JSON.stringify({ xp, quests, starts, ends, drops, items, names }));
 console.log(`${Object.keys(creatures).length} creatures, ${Object.keys(quests).length} quests, ${Object.keys(items).length} items written to ${OUT}`);

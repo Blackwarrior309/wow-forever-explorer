@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { decodeState, encodeState, playerName, roomName, type PlayerState } from '../src/viewer/multiplayer';
+import { decodeEvent, decodeMobs, decodeState, encodeState, playerName, roomName, type PlayerState } from '../src/viewer/multiplayer';
 
 const walking: PlayerState = {
 	name: 'Thrall',
@@ -15,6 +15,10 @@ const walking: PlayerState = {
 	walkMode: true,
 	turning: 1,
 	emote: 'dance',
+	hp: 80,
+	maxHp: 120,
+	level: 7,
+	cls: 8,
 };
 
 test('a state survives the trip, positions to the centimetre', () => {
@@ -45,4 +49,20 @@ test('names and rooms are made safe', () => {
 	expect(roomName('a/b/+/#')).toBe('a-b');
 	expect(playerName('   ')).toBe('Adventurer');
 	expect(playerName(' Jaina ')).toBe('Jaina');
+});
+
+test('combat events and mob reports are checked like states', () => {
+	expect(decodeEvent(JSON.stringify({ t: 'hit', k: '775971:creature:12', a: 30, s: 2 }))).toEqual({ t: 'hit', k: '775971:creature:12', a: 30, s: 2 });
+	expect(decodeEvent(JSON.stringify({ t: 'hit', k: 'x', a: -5 }))).toBeNull();
+	expect(decodeEvent(JSON.stringify({ t: 'hit', k: '../../etc', a: 5 }))).toBeNull();
+	expect(decodeEvent(JSON.stringify({ t: 'dmg', to: 'abc123', a: 12, n: 'Wolf' }))).toEqual({ t: 'dmg', to: 'abc123', a: 12, n: 'Wolf' });
+	expect(decodeEvent(JSON.stringify({ t: 'kill', k: 'k1', e: 299, l: 3, x: false, by: ['abc', 7, 'BAD ID'] }))).toEqual({ t: 'kill', k: 'k1', e: 299, l: 3, x: false, by: ['abc'] });
+	expect(decodeEvent(JSON.stringify({ t: 'heal', k: 'k1' }))).toBeNull();
+	const mobs = decodeMobs(JSON.stringify({ mobs: [
+		{ k: 'k1', e: 299, l: 3, hp: 999, max: 50, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 },
+		{ k: 'k2', e: 1, l: 1, hp: 1, max: 1, p: [1, 2], f: 0, s: 0, t: '', w: 0 },
+		{ k: 'k3', e: 1, l: 1, hp: 1, max: 1, p: [1, 2, 3], f: 0, s: 7, t: '', w: 0 },
+	] }));
+	expect(mobs).toEqual([{ k: 'k1', e: 299, l: 3, hp: 50, max: 50, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 }]);
+	expect(decodeMobs('[]')).toBeNull();
 });

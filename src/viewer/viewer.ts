@@ -10,6 +10,7 @@ import type { Place } from '../explorer/places';
 import type { SpawnInfo } from '../explorer/spawns';
 import { Character, type CharacterLook } from './character';
 import { RemotePlayers } from './remotePlayers';
+import { Adventure } from './adventure';
 import { Portraits } from './portraits';
 import type { Emote } from './emotes';
 import type { CharacterRace } from '../explorer/spawns';
@@ -400,6 +401,8 @@ export class Viewer {
 	private character: Character | null = null;
 	/** Everyone else in the multiplayer room, once the world has loaded. */
 	remotePlayers: RemotePlayers | null = null;
+	/** Fighting and quests on foot (see adventure.ts), once the world has loaded. */
+	adventure: Adventure | null = null;
 	/** Who walks: race, sex, model and look (the default a Stormwind City Guard on the classic model). */
 	private characterLook: CharacterLook = { race: 1, sex: 0, hd: false, look: 0, outfit: 'guard' };
 	private portraitRenderer: Portraits | null = null;
@@ -627,13 +630,17 @@ export class Viewer {
 
 	/** Spawn under the mouse, or under the centre crosshair while the mouse is captured. */
 	private pickAt(e: MouseEvent): SpawnInfo | null {
+		return this.pickHit(e)?.info ?? null;
+	}
+
+	private pickHit(e: MouseEvent): { info: SpawnInfo; key: string } | null {
 		if (!this.objects) return null;
 		const ndc = this.controls.locked
 			? new THREE.Vector2(0, 0)
 			: new THREE.Vector2((e.offsetX / this.canvas.clientWidth) * 2 - 1, -(e.offsetY / this.canvas.clientHeight) * 2 + 1);
 		this.raycaster.setFromCamera(ndc, this.camera);
 		this.raycaster.far = PICK_DISTANCE;
-		return this.objects.pick(this.raycaster)?.info ?? null;
+		return this.objects.pick(this.raycaster);
 	}
 
 	/** Clicking a creature or object opens its info (releasing the mouse); elsewhere captures the mouse. */
@@ -641,8 +648,8 @@ export class Viewer {
 		// Walking, a click selects what's under the mouse and never captures it (holding the right
 		// button does); a drag that turned the camera isn't a click.
 		if (this.walker.active) {
-			const hit = this.walker.wasDrag || this.controls.locked ? null : this.pickAt(e);
-			if (hit) this.onSelect(hit);
+			const hit = this.walker.wasDrag || this.controls.locked ? null : this.pickHit(e);
+			if (hit && !this.adventure?.click(hit)) this.onSelect(hit.info);
 			return;
 		}
 		if (this.pressedWalking) return;
@@ -876,8 +883,24 @@ export class Viewer {
 			jumped: walking && w.jumped,
 			walkMode: walking && w.walkMode,
 			turning: walking ? w.turning : 0,
-			emote: this.emoting?.key ?? null,
+			emote: this.walker.active ? (this.character?.emoting?.key ?? null) : null,
+			hp: this.adventure?.enabled ? Math.round(this.adventure.hp) : 0,
+			maxHp: this.adventure?.enabled ? this.adventure.maxHp : 0,
+			level: this.adventure?.enabled ? this.adventure.level : 0,
+			cls: this.adventure?.enabled ? this.adventure.cls.id : 0,
 		};
+	}
+
+	/** The walking character's feet. */
+	get walkerPosition(): THREE.Vector3 {
+		return this.walker.position;
+	}
+
+	/** Where a point in the world shows in the view (CSS pixels), or null behind the camera. */
+	screenPosition(at: THREE.Vector3): { x: number; y: number } | null {
+		const v = at.clone().project(this.camera);
+		if (v.z > 1) return null;
+		return { x: ((v.x + 1) / 2) * this.canvas.clientWidth, y: ((1 - v.y) / 2) * this.canvas.clientHeight };
 	}
 
 	/** Who walks: race, sex, model and look. */
@@ -1110,6 +1133,17 @@ export class Viewer {
 		this.character = new Character(this.storage, this.usesCompressedTextures, anisotropy, prepare);
 		this.scene.add(this.character.group);
 		this.remotePlayers = new RemotePlayers(this.scene, () => new Character(this.storage, this.usesCompressedTextures, anisotropy, prepare));
+		this.adventure = new Adventure({
+			scene: this.scene,
+			walker: this.walker,
+			character: () => this.character,
+			objects: this.objects,
+			remotePlayers: this.remotePlayers,
+			createCharacter: () => new Character(this.storage, this.usesCompressedTextures, anisotropy, prepare),
+			floorAt: (x, z, near) => this.walker.floorAt(x, z, near + 2, near - 6)?.y ?? NaN,
+			race: () => this.characterLook.race,
+			female: () => this.characterLook.sex === 1,
+		});
 		// Walking creatures follow the ground.
 		this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);
 		this.clutter = new ClutterManager(this.storage, this.usesCompressedTextures, anisotropy, prepare);
@@ -1808,6 +1842,8 @@ export class Viewer {
 					this.plates.sort((a, b) => a.distance - b.distance).length = NAMEPLATE_MAX;
 				}
 			this.remotePlayers?.plates(this.plates);
+			this.adventure?.plates(this.plates);
+			for (const p of this.plates) p.marker = this.adventure?.marker(p.info) ?? null;
 			// Like the game, only name NPCs you could actually see. Underground (caves, mines) the
 			// terrain surface is overhead, so only buildings count.
 			const cam = this.camera.position;
@@ -1909,6 +1945,7 @@ export class Viewer {
 		}
 		this.character?.update(dt, this.walker);
 		this.remotePlayers?.update(dt);
+		this.adventure?.update(dt);
 
 		liquidTime.value = now / 1000;
 		animateFlipbooks(now / 1000);

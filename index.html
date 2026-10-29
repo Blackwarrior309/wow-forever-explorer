@@ -187,6 +187,22 @@
 			</div>
 		</details>
 
+		<details id="adventure" name="menu">
+			<summary>Adventure</summary>
+			<div class="menu-body panel">
+				<label class="check"><input type="checkbox" id="adventure-on"> Fight and do quests on foot</label>
+				<p class="muted small">Walk on the ground (<kbd>`</kbd>). Click a creature to target it and again to attack, or press <kbd>Tab</kbd> for the nearest; <kbd>1</kbd> attacks, <kbd>2</kbd>–<kbd>7</kbd> use your abilities. Click quest givers marked ! or ? to talk. Your character is kept in this browser.</p>
+				<div class="flight-grid">
+					<label for="adventure-class">Class</label>
+					<select id="adventure-class" class="span"></select>
+				</div>
+				<div id="adventure-summary" class="muted small"></div>
+				<h3 class="travel-heading">Quest log</h3>
+				<ul id="quest-log" class="small"></ul>
+				<div class="flight-buttons"><button id="adventure-new" title="Start again at level 1 with the class chosen, without quests">New character</button></div>
+			</div>
+		</details>
+
 		<details id="together" name="menu">
 			<summary>Together</summary>
 			<div class="menu-body panel">
@@ -293,6 +309,35 @@
 	</div>
 
 	<div id="nameplates" aria-hidden="true"></div>
+
+	<!-- Adventure mode: unit frames, action bar, experience, quest tracker, messages, floating numbers. -->
+	<div id="adventure-hud" hidden>
+		<div id="unit-frames">
+			<div id="player-frame" class="unit-frame">
+				<div class="unit-head"><span class="unit-name"></span><span class="unit-level"></span></div>
+				<div class="bar health"><i></i><b></b></div>
+				<div class="bar power"><i></i><b></b></div>
+			</div>
+			<div id="target-frame" class="unit-frame" hidden>
+				<div class="unit-head"><span class="unit-name"></span><span class="unit-level"></span></div>
+				<div class="bar health"><i></i><b></b></div>
+			</div>
+		</div>
+		<div id="adventure-messages" aria-live="polite"></div>
+		<div id="floats" aria-hidden="true"></div>
+		<div id="quest-tracker"></div>
+		<div id="adventure-bottom">
+			<div id="cast-bar" class="bar" hidden><i></i><b></b></div>
+			<div id="action-bar"></div>
+			<div id="xp-bar" class="bar"><i></i><b></b></div>
+		</div>
+		<div id="death-box" class="panel" hidden><p>You died.</p><button id="release" class="primary">Release spirit</button></div>
+	</div>
+	<div id="quest-dialog" class="panel" hidden role="dialog" aria-labelledby="quest-title">
+		<div class="quest-head"><h2 id="quest-title"></h2><button id="quest-close" class="plain" title="Close (Esc)" aria-label="Close">×</button></div>
+		<div id="quest-body"></div>
+		<div id="quest-buttons" class="flight-buttons"></div>
+	</div>
 	<div id="crosshair" hidden></div>
 
 	<!-- Right: the minimap, then what was clicked. -->

@@ -417,6 +417,17 @@ export class Adventure {
 
 	// --- Fighting --------------------------------------------------------------------------------
 
+	/** Why an ability can't be used right now (for the action bar's tint), or null. */
+	problem(a: Ability): string | null {
+		return this.cannotUse(a);
+	}
+
+	/** What a creature target looks like (for its portrait): its display and held weapons. */
+	targetLook(key = this.target): { displayId: number; variant?: string } | null {
+		const c = key ? this.world.objects.creature(key) : null;
+		return c ? { displayId: c.displayId, variant: c.variant } : null;
+	}
+
 	knows(a: Ability): boolean { return a.level === 1 || this.learned.has(a.id); }
 	trainingCost(a: Ability): number { return a.level * 10; }
 	trainerProblem(key: string): string | null {

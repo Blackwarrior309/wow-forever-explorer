@@ -25,6 +25,7 @@ import { WorldMap } from './worldMap';
 import { setHeard } from './audioOut';
 import { readEnabled as soundSaved } from './music';
 import { setUpAdventure } from './adventureHud';
+import { setUpGuide } from './guideHud';
 import { MultiplayerRoom, playerName, roomName } from './multiplayer';
 import { keptVersions, productName, sessionHost, setKeptVersions, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
 
@@ -516,6 +517,7 @@ async function explore(): Promise<void> {
 		setUpEmotes(viewer);
 		setUpTogether(viewer);
 		setUpAdventure(viewer, storage);
+		setUpGuide(viewer, storage);
 		setUpSound(viewer);
 		setUpHelp();
 		// And on foot, the character where it stood, once its look is set.

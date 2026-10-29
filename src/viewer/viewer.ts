@@ -376,6 +376,9 @@ function supportsClipControl(): boolean {
 }
 
 /** WoW world coordinates (x north, y west, z up) on a map -> where that map sits in the world. */
+/** A guide waypoint's pillar of light, yards tall. */
+const BEACON_HEIGHT = 400;
+
 function worldFromWow(placement: ContinentPlacement, x: number, y: number, z: number): THREE.Vector3 {
 	return new THREE.Vector3(MAP_ORIGIN - y + placement.offsetX * TILE_SIZE, z, MAP_ORIGIN - x + placement.offsetY * TILE_SIZE);
 }
@@ -905,6 +908,39 @@ export class Viewer {
 			level: this.adventure?.enabled ? this.adventure.level : 0,
 			cls: this.adventure?.enabled ? this.adventure.cls.id : 0,
 		};
+	}
+
+	/** A guide's waypoint: a pillar of light standing on the ground there (see guideHud.ts). */
+	private beacon: THREE.Mesh | null = null;
+	private beaconAsked = 0;
+
+	/** Shows the pillar at a point of a map in WoW coordinates, or hides it (null). */
+	async setWaypoint(spot: { mapId: number; x: number; y: number } | null): Promise<void> {
+		const asked = ++this.beaconAsked;
+		const placement = spot ? await this.placementFor(spot.mapId) : null;
+		if (asked !== this.beaconAsked) return;
+		if (!spot || !placement) {
+			if (this.beacon) this.beacon.visible = false;
+			return;
+		}
+		if (!this.beacon) {
+			const material = new THREE.MeshBasicMaterial({ color: 0xffd200, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
+			this.beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, BEACON_HEIGHT, 12, 1, true), material);
+			this.beacon.frustumCulled = false;
+			this.scene.add(this.beacon);
+		}
+		this.beacon.position.copy(worldFromWow(placement, spot.x, spot.y, 0));
+		this.beacon.userData.ground = NaN;
+		this.beacon.visible = true;
+	}
+
+	/** Stands the pillar on the ground once the ground there has loaded. */
+	private updateBeacon(): void {
+		const b = this.beacon;
+		if (!b?.visible || Number.isFinite(b.userData.ground)) return;
+		const ground = this.terrain.heightAt(b.position.x, b.position.z);
+		if (Number.isFinite(ground)) b.userData.ground = ground;
+		b.position.y = (Number.isFinite(ground) ? ground : this.camera.position.y - 50) + BEACON_HEIGHT / 2;
 	}
 
 	/** The walking character's feet. */
@@ -1966,6 +2002,7 @@ export class Viewer {
 		this.character?.update(dt, this.walker);
 		this.remotePlayers?.update(dt);
 		this.adventure?.update(dt);
+		this.updateBeacon();
 
 		liquidTime.value = now / 1000;
 		animateFlipbooks(now / 1000);

@@ -1,6 +1,6 @@
-import { CLASSES } from '../game/classes';
+import { CLASSES, type Ability } from '../game/classes';
 import { questText, type Giver } from '../game/quests';
-import { money, questXp, sideOf } from '../game/rules';
+import { money, questXp, sideOf, weaponDamage } from '../game/rules';
 import type { AsyncStorageApi } from '../worker/protocol';
 import { isTyping } from './typing';
 import type { Viewer } from './viewer';
@@ -143,20 +143,62 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		buildBar();
 		renderBook();
 	};
-	let slots: { button: HTMLButtonElement; cooldown: HTMLElement; ability: (typeof adventure.abilities)[number] | null }[] = [];
+	// The bar holds Attack and the abilities learned, in the class's order; the number keys follow it.
+	let slots: { button: HTMLButtonElement; cooldown: HTMLElement; ability: Ability | null }[] = [];
+	const onBar = () => adventure.abilities.filter((a) => adventure.knows(a) && a.level <= adventure.level);
+	const useSlot = (i: number) => {
+		const slot = slots[i];
+		if (slot) adventure.use(slot.ability ? adventure.abilities.indexOf(slot.ability) + 1 : 0);
+	};
+	const tip = $('spell-tooltip');
+	const row = (left: string, right = '') => el('div', { className: 'row' }, el('span', { textContent: left }), el('span', { textContent: right }));
+	/** What an ability does, with the numbers at the player's level. */
+	const describe = (a: Ability): string => {
+		const swing = weaponDamage(adventure.level);
+		const range = (m: number) => `${Math.round(swing * m * 0.9)} to ${Math.round(swing * m * 1.1)}`;
+		const who = a.aoe ? `all enemies within ${a.aoe} yards` : 'the target';
+		const parts: string[] = [];
+		if (a.damage) parts.push(`Deals ${range(a.damage)} damage to ${who}${a.drain ? ', healing you for as much' : ''}.`);
+		if (a.dot) parts.push(`${a.damage ? 'Then causes' : 'Causes'} ${Math.round(swing * a.dot.total)} damage over ${a.dot.duration} sec.`);
+		if (a.stun) parts.push(`Stuns ${who} for ${a.stun} sec.`);
+		if (a.heal) parts.push(`Heals you for ${Math.round(adventure.maxHp * a.heal)}.`);
+		if (a.hot) parts.push(`Heals you for ${Math.round(adventure.maxHp * a.hot.total)} over ${a.hot.duration} sec.`);
+		if (a.shield) parts.push(`Absorbs ${Math.round(adventure.maxHp * a.shield)} damage.`);
+		if (a.buff) parts.push(`Increases your damage by ${Math.round(a.buff.damage * 100)}% for ${a.buff.duration >= 60 ? `${a.buff.duration / 60} min` : `${a.buff.duration} sec`}.`);
+		if (a.execute) parts.push(`Only usable on enemies with less than ${Math.round(a.execute * 100)}% health.`);
+		return parts.join(' ');
+	};
+	const showTip = (a: Ability | null) => {
+		if (!a) {
+			tip.replaceChildren(el('div', { className: 'title', textContent: 'Attack' }), el('div', { className: 'desc', textContent: 'Starts or stops attacking your target with your weapon.' }));
+		} else {
+			const r = adventure.cls.resource;
+			const cost = r === 'mana' ? `${Math.round(a.cost * adventure.maxPower)} Mana` : `${a.cost} ${r === 'rage' ? 'Rage' : 'Energy'}`;
+			const reach = a.kind === 'melee' ? 'Melee Range' : a.kind === 'ranged' ? `${a.range ?? 30} yd range` : '';
+			const lines = [el('div', { className: 'title', textContent: a.name }), row(cost, reach), row(a.cast ? `${a.cast} sec cast` : 'Instant', a.cooldown ? `${a.cooldown} sec cooldown` : '')];
+			if (a.level > adventure.level) lines.push(el('div', { className: 'need', textContent: `Requires Level ${a.level}` }));
+			else if (!adventure.knows(a)) lines.push(el('div', { className: 'need', textContent: 'Not learned: visit your class trainer' }));
+			lines.push(el('div', { className: 'desc', textContent: describe(a) }));
+			tip.replaceChildren(...lines);
+		}
+		tip.hidden = false;
+	};
 	const buildBar = () => {
-		const entries = [null, ...adventure.abilities];
+		const entries = [null, ...onBar()];
 		slots = entries.map((ability, i) => {
 			const name = ability?.name ?? 'Attack';
 			const icon = icons.get(ability?.icon ?? ATTACK_ICON);
 			const cooldown = el('span', { className: 'cooldown', hidden: true });
-			const button = el('button', { title: ability ? `${name} (level ${ability.level})` : 'Attack: start or stop hitting your target' }, el('span', { className: 'key', textContent: String(i + 1) }), cooldown);
+			const button = el('button', { ariaLabel: name }, el('span', { className: 'glow' }), el('span', { className: 'key', textContent: i < 9 ? String(i + 1) : '' }), cooldown);
 			if (icon) button.style.backgroundImage = `url(${icon})`;
 			else button.append(el('span', { className: 'label', textContent: name }));
-			button.addEventListener('click', () => adventure.use(i));
+			button.addEventListener('click', () => useSlot(i));
+			button.addEventListener('mouseenter', () => showTip(ability));
+			button.addEventListener('mouseleave', () => (tip.hidden = true));
 			return { button, cooldown, ability };
 		});
 		bar.replaceChildren(...slots.map((s) => s.button));
+		tip.hidden = true;
 	};
 
 	const renderBook = () => {
@@ -166,7 +208,8 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 			const icon = el('img', { alt: '', className: 'spell-icon', hidden: !icons.get(a.icon), src: icons.get(a.icon) || '' });
 			const cost = adventure.cls.resource === 'mana' ? `${Math.round(a.cost * 100)}% mana` : `${a.cost} ${adventure.cls.resource}`;
 			const detail = [cost, a.kind === 'self' ? 'Self' : a.kind === 'melee' ? 'Melee' : `${a.range ?? 30} yd range`, a.cast ? `${a.cast}s cast` : 'Instant', a.cooldown ? `${a.cooldown}s cooldown` : '', a.damage ? 'Direct damage' : '', a.dot ? 'Damage over time' : '', a.heal || a.hot ? 'Healing' : '', a.shield ? 'Absorbs damage' : '', a.stun ? 'Stuns target' : '', a.buff ? 'Damage buff' : ''].filter(Boolean).join(' · ');
-			const use = el('button', { textContent: available ? `Use · ${i + 2}` : a.level > adventure.level ? `Level ${a.level}` : 'Visit trainer', disabled: !available });
+			const key = onBar().indexOf(a) + 2;
+			const use = el('button', { textContent: available ? `Use${key <= 9 ? ` · ${key}` : ''}` : a.level > adventure.level ? `Level ${a.level}` : 'Visit trainer', disabled: !available });
 			use.onclick = () => {
 				if (!adventure.enabled || !viewer.walking) return adventure.onMessage('Turn Adventure on and walk on the ground first', true);
 				adventure.use(i + 1);
@@ -186,7 +229,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		if (digit && !e.shiftKey) {
 			e.preventDefault();
 			e.stopImmediatePropagation();
-			if (!e.repeat) adventure.use(Number(digit) - 1);
+			if (!e.repeat) useSlot(Number(digit) - 1);
 		} else if (e.code === 'Tab') {
 			e.preventDefault();
 			e.stopImmediatePropagation();
@@ -321,6 +364,20 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	const player = $('player-frame');
 	const target = $('target-frame');
 	const castBar = $('cast-bar');
+	const playerPortrait = player.querySelector<HTMLImageElement>('.portrait')!;
+	const targetPortrait = target.querySelector<HTMLImageElement>('.portrait')!;
+	// Drawn once per look and kept: a 3D portrait takes a moment.
+	const PORTRAIT_SIZE = 128;
+	const pictures = new Map<string, Promise<string>>();
+	const portrait = (img: HTMLImageElement, key: string, draw: () => Promise<Blob | null>) => {
+		if (img.dataset.key === key) return;
+		img.dataset.key = key;
+		if (!pictures.has(key)) pictures.set(key, draw().then((b) => (b ? URL.createObjectURL(b) : '')).catch(() => ''));
+		void pictures.get(key)!.then((url) => {
+			if (img.dataset.key === key) img.src = url || '';
+			img.style.visibility = url ? '' : 'hidden';
+		});
+	};
 	const floatSpans: HTMLSpanElement[] = [];
 	const frame = () => {
 		requestAnimationFrame(frame);
@@ -342,20 +399,34 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		target.hidden = !t;
 		if (t) {
 			const reaction = t.info.reaction?.[sideOf(viewer.look.race)] ?? 'neutral';
-			target.className = `unit-frame ${reaction}`;
+			const rank = t.info.rank === 'Rare' ? 'rare' : t.info.rank ? 'elite' : '';
+			target.className = `unit-frame ${reaction} ${rank} ${t.dead ? 'dead' : ''}`;
 			target.querySelector('.unit-name')!.textContent = t.info.name;
-			target.querySelector('.unit-level')!.textContent = t.level;
+			target.querySelector('.unit-level')!.textContent = t.info.rank === 'Boss' ? '??' : t.level;
 			setBar(target.querySelector('.health')!, t.hp, t.maxHp, t.dead ? 'Dead' : `${Math.round((100 * t.hp) / t.maxHp)}%`);
+			setBar(target.querySelector('.power')!, 0, 1, '');
+			const look = adventure.targetLook();
+			if (look) portrait(targetPortrait, `c${look.displayId}:${look.variant ?? ''}`, () => viewer.portraits().drawCreature(look.displayId, look.variant, PORTRAIT_SIZE, PORTRAIT_SIZE));
 		}
+		portrait(playerPortrait, `p${JSON.stringify(viewer.look)}`, () => viewer.portraits().draw(viewer.look, PORTRAIT_SIZE, PORTRAIT_SIZE, true));
 		const cast = adventure.cast;
 		castBar.hidden = !cast;
-		if (cast) setBar(castBar, adventure.time - cast.start, cast.end - cast.start, cast.ability.name);
+		if (cast) {
+			const done = Math.min(1, (adventure.time - cast.start) / (cast.end - cast.start));
+			setBar(castBar, done, 1, cast.ability.name);
+			castBar.style.setProperty('--progress', `${done * 100}%`);
+		}
 		$('death-box').hidden = adventure.alive;
 		for (const [i, s] of slots.entries()) {
 			s.button.classList.toggle('active', i === 0 && adventure.autoAttack);
-			s.button.classList.toggle('locked', !!s.ability && (s.ability.level > adventure.level || !adventure.knows(s.ability)));
-			const left = s.ability ? adventure.cooldownLeft(s.ability) : 0;
+			const why = s.ability ? adventure.problem(s.ability) : null;
+			s.button.classList.toggle('nopower', !!why?.startsWith('Not enough'));
+			s.button.classList.toggle('range', why === 'Out of range');
+			const a = s.ability;
+			const left = a ? adventure.cooldownLeft(a) : 0;
 			s.cooldown.hidden = left <= 0.05;
+			// The sweep runs over the ability's own cooldown, or the global one.
+			s.cooldown.style.setProperty('--left', String(a ? Math.min(1, left / Math.max(a.cooldown ?? 0, 1.5)) : 0));
 			s.cooldown.textContent = left > 1.5 ? String(Math.ceil(left)) : '';
 		}
 		// Floating numbers rise and fade over what was hit.

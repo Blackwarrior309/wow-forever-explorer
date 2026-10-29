@@ -57,6 +57,27 @@ const SCROLL_IMAGES: [name: string, path: string, shape: Shape][] = [
 	['scroll-groove', 'interface/paperdollinfoframe/ui-character-scrollbar.blp', { kind: 'crop', x: 0, y: 64, w: 31, h: 128 }],
 ];
 
+/**
+ * Adventure mode's screen (see adventureHud.ts): unit frames (the target frame's used 232×100,
+ * drawn mirrored for the player), the main menu bar's two action-button strips and its gryphon,
+ * action button borders and highlights, and the casting bar. Wanted but not needed: without them
+ * the HUD keeps its plain look.
+ */
+const HUD_IMAGES: [name: string, path: string, shape: Shape][] = [
+	['hud-frame', 'interface/targetingframe/ui-targetingframe.blp', { kind: 'crop', x: 24, y: 0, w: 232, h: 100 }],
+	['hud-frame-elite', 'interface/targetingframe/ui-targetingframe-elite.blp', { kind: 'crop', x: 24, y: 0, w: 232, h: 100 }],
+	['hud-frame-rare', 'interface/targetingframe/ui-targetingframe-rare.blp', { kind: 'crop', x: 24, y: 0, w: 232, h: 100 }],
+	['hud-statusbar', 'interface/targetingframe/ui-statusbar.blp', { kind: 'whole' }],
+	['hud-bar-left', 'interface/mainmenubar/ui-mainmenubar-dwarf.blp', { kind: 'crop', x: 0, y: 213, w: 256, h: 43 }],
+	['hud-bar-right', 'interface/mainmenubar/ui-mainmenubar-dwarf.blp', { kind: 'crop', x: 0, y: 149, w: 256, h: 43 }],
+	['hud-endcap', 'interface/mainmenubar/ui-mainmenubar-endcap-dwarf.blp', { kind: 'whole' }],
+	['hud-slot', 'interface/buttons/ui-quickslot2.blp', { kind: 'whole' }],
+	['hud-slot-highlight', 'interface/buttons/buttonhilight-square.blp', { kind: 'whole' }],
+	['hud-slot-checked', 'interface/buttons/checkbuttonhilight.blp', { kind: 'whole' }],
+	['hud-castbar', 'interface/castingbar/ui-castingbar-border.blp', { kind: 'whole' }],
+	['hud-spark', 'interface/castingbar/ui-castingbar-spark.blp', { kind: 'whole' }],
+];
+
 /** The player's arrow on the minimap, drawn by minimap.ts rather than CSS. */
 const MINIMAP_ARROW = 'interface/minimap/minimaparrow.blp';
 
@@ -66,7 +87,7 @@ export interface UiAssets {
 }
 
 /** Pictures the game adds onto what's under them (highlights): black is clear, brightness is opacity. */
-const GLOWS = new Set(['button-highlight', 'checkbox-highlight', 'zoom-highlight']);
+const GLOWS = new Set(['button-highlight', 'checkbox-highlight', 'zoom-highlight', 'hud-slot-highlight', 'hud-slot-checked', 'hud-spark']);
 
 /** Turns an additive picture into one that looks the same drawn normally over the page. */
 function glowToAlpha(image: Image): Image {
@@ -173,7 +194,8 @@ export async function loadUiAssets(storage: AsyncStorageApi): Promise<UiAssets> 
 	const fonts = loadFonts(storage);
 	let minimapArrow: HTMLCanvasElement | null = null;
 	try {
-		const images = await storage.loadInterfaceImages([...IMAGES.map(([, path]) => path), MINIMAP_ARROW, ...SCROLL_IMAGES.map(([, path]) => path)]);
+		const images = await storage.loadInterfaceImages([...IMAGES.map(([, path]) => path), MINIMAP_ARROW, ...SCROLL_IMAGES.map(([, path]) => path), ...HUD_IMAGES.map(([, path]) => path)]);
+		const hud = images.splice(images.length - HUD_IMAGES.length);
 		const scroll = images.splice(IMAGES.length + 1);
 		const arrow = images.pop();
 		if (arrow) minimapArrow = toCanvas(arrow);
@@ -187,6 +209,11 @@ export async function loadUiAssets(storage: AsyncStorageApi): Promise<UiAssets> 
 			const scrollUrls = await Promise.all(scroll.map((image, i) => toUrl(image!, SCROLL_IMAGES[i])));
 			SCROLL_IMAGES.forEach(([name], i) => root.setProperty(`--wow-${name}`, `url("${scrollUrls[i]}")`));
 			document.body.classList.add('wow-scroll');
+		}
+		if (hud.every((image) => image)) {
+			const hudUrls = await Promise.all(hud.map((image, i) => toUrl(image!, HUD_IMAGES[i])));
+			HUD_IMAGES.forEach(([name], i) => root.setProperty(`--wow-${name}`, `url("${hudUrls[i]}")`));
+			document.body.classList.add('wow-hud');
 		}
 	} catch (e) {
 		console.warn('Game interface pictures unavailable, keeping the plain look:', e);

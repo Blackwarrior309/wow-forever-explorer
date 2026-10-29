@@ -2350,51 +2350,106 @@ body.wow-ui {
 	padding-left: 18px;
 }
 
-/* Adventure mode. */
+/* Adventure mode: laid out as the game's own interface, in its pictures when the install has them (wow-hud). */
 #adventure-hud {
 	position: fixed;
 	inset: 0;
 	pointer-events: none;
 	z-index: 5;
+	font-family: 'Friz Quadrata', 'Trebuchet MS', system-ui, sans-serif;
+}
+
+/* The camera's place would sit under the player frame. */
+body:has(#adventure-hud:not([hidden])) #top-left {
+	display: none;
 }
 
 #unit-frames {
 	position: absolute;
-	top: calc(var(--bar) + 8px);
-	left: 50%;
-	transform: translateX(-50%);
+	top: calc(var(--bar) + 2px);
+	left: 4px;
 	display: flex;
-	gap: 12px;
-}
-
-.unit-frame {
-	width: 220px;
-	background: var(--panel);
-	border: 1px solid var(--line);
-	border-radius: 6px;
-	padding: 6px 8px;
-}
-
-.unit-head {
-	display: flex;
-	justify-content: space-between;
 	gap: 8px;
-	font-weight: 600;
+}
+
+/* A unit frame is the game's 232×100: portrait in the ring, name, health and power bars, level in the small ring. */
+.unit-frame {
+	position: relative;
+	width: 232px;
+	height: 100px;
+	pointer-events: auto;
+}
+
+.unit-frame .portrait {
+	position: absolute;
+	top: 12px;
+	width: 64px;
+	height: 64px;
+	border-radius: 50%;
+	object-fit: cover;
+	background: radial-gradient(#2a2f38, #0b0d10);
+}
+
+.unit-frame .unit-name,
+.unit-frame .bar,
+.unit-frame::before {
+	position: absolute;
+	width: 119px;
+}
+
+.unit-frame .unit-name {
+	top: 23px;
+	height: 17px;
+	line-height: 17px;
+	text-align: center;
+	color: #ffd200;
+	font-size: 12px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	text-shadow: 1px 1px 0 #000;
+	z-index: 3;
 }
 
-.unit-level {
-	color: var(--accent);
+.unit-frame .bar.health { top: 41px; }
+.unit-frame .bar.power { top: 52px; }
+
+.unit-frame .unit-level {
+	position: absolute;
+	top: 58px;
+	width: 28px;
+	height: 16px;
+	line-height: 16px;
+	text-align: center;
+	color: #ffd200;
+	font-size: 12px;
+	text-shadow: 1px 1px 0 #000;
+	z-index: 3;
 }
 
+#player-frame .portrait { left: 42px; }
+#player-frame .unit-name, #player-frame .bar { left: 106px; }
+#player-frame .unit-level { left: 39px; }
+#target-frame .portrait { left: 126px; }
+#target-frame .unit-name, #target-frame .bar, #target-frame::before { left: 7px; }
+#target-frame .unit-level { left: 165px; }
+
+/* The target's name sits on its reaction's colour. */
+#target-frame::before {
+	content: '';
+	top: 23px;
+	height: 17px;
+	background: rgba(0, 255, 0, 0.45);
+}
+#target-frame.hostile::before { background: rgba(255, 0, 0, 0.5); }
+#target-frame.neutral::before { background: rgba(255, 255, 0, 0.45); }
+#target-frame.dead .portrait { filter: grayscale(1) brightness(0.6); }
+
+/* Bars: the game's status bar texture tinted, the value on top. */
 #adventure-hud .bar {
 	position: relative;
-	height: 14px;
-	margin-top: 4px;
-	background: #1b1f25;
-	border-radius: 3px;
+	height: 12px;
+	background: rgba(0, 0, 0, 0.55);
 	overflow: hidden;
 }
 
@@ -2402,114 +2457,265 @@ body.wow-ui {
 	position: absolute;
 	inset: 0 auto 0 0;
 	width: 0;
-	background: #2fa83b;
+	background-color: var(--fill, #00d000);
 	transition: width 0.15s linear;
+}
+
+.wow-hud #adventure-hud .bar i {
+	background-image: var(--wow-hud-statusbar);
+	background-size: 100% 100%;
+	background-blend-mode: multiply;
 }
 
 #adventure-hud .bar b {
 	position: relative;
 	display: block;
 	text-align: center;
-	font-size: 11px;
-	line-height: 14px;
-	font-weight: 600;
-	text-shadow: 0 1px 2px #000;
+	font: 10px/12px 'Arial Narrow', system-ui, sans-serif;
+	color: #fff;
+	text-shadow: 1px 1px 0 #000;
 	font-variant-numeric: tabular-nums;
+	z-index: 3;
 }
 
-#adventure-hud .bar.power.mana i { background: #2f5fd0; }
-#adventure-hud .bar.power.rage i { background: #c0302a; }
-#adventure-hud .bar.power.energy i { background: #d8c02a; }
-#target-frame.hostile .bar.health i { background: #c0302a; }
-#target-frame.neutral .bar.health i { background: #c8a52a; }
+.bar.health { --fill: #00ff00; }
+.bar.power.mana { --fill: #0000ff; }
+.bar.power.rage { --fill: #ff0000; }
+.bar.power.energy { --fill: #ffff00; }
 
+/* Without the game's pictures: a plain panel. */
+body:not(.wow-hud) .unit-frame {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+}
+body:not(.wow-hud) .unit-frame .portrait { box-shadow: 0 0 0 2px #8a7a50; }
+
+/* With them: the frame over the bars and portrait (mirrored for the player), elite and rare dragons. */
+.wow-hud .unit-frame::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: var(--wow-hud-frame) 0 0 / 100% 100% no-repeat;
+	z-index: 2;
+	pointer-events: none;
+}
+.wow-hud #player-frame::after { transform: scaleX(-1); }
+.wow-hud #target-frame.elite::after { background-image: var(--wow-hud-frame-elite); }
+.wow-hud #target-frame.rare::after { background-image: var(--wow-hud-frame-rare); }
+
+/* The bottom: casting bar, experience, and the main menu bar's action buttons between its gryphons. */
 #adventure-bottom {
 	position: absolute;
-	bottom: 14px;
+	bottom: 0;
 	left: 50%;
 	transform: translateX(-50%);
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 6px;
-	width: min(560px, calc(100vw - 24px));
+	gap: 18px;
 }
 
 #cast-bar {
-	width: 260px;
+	position: relative;
+	width: 256px;
+	height: 64px;
 }
 
-#cast-bar i {
-	background: #d9a441 !important;
+#cast-bar .bar {
+	position: absolute;
+	left: 31px;
+	top: 26px;
+	width: 195px;
+	height: 13px;
+	--fill: #ffb300;
 }
+
+#cast-bar s {
+	position: absolute;
+	top: -10px;
+	left: var(--progress, 0%);
+	width: 32px;
+	height: 32px;
+	margin-left: -16px;
+	z-index: 3;
+}
+
+.wow-hud #cast-bar { background: var(--wow-hud-castbar) 0 0 / 100% 100% no-repeat; }
+.wow-hud #cast-bar s { background: var(--wow-hud-spark) 0 0 / 100% 100% no-repeat; }
+body:not(.wow-hud) #cast-bar .bar { border: 1px solid #8a7a50; }
+
+#cast-bar > b {
+	position: absolute;
+	left: 31px;
+	top: 26px;
+	width: 195px;
+	text-align: center;
+	font-size: 12px;
+	line-height: 13px;
+	color: #fff;
+	text-shadow: 1px 1px 0 #000;
+	z-index: 4;
+}
+
+#main-bar {
+	position: relative;
+	width: 512px;
+	height: 43px;
+	pointer-events: auto;
+}
+
+body:not(.wow-hud) #main-bar {
+	background: var(--panel);
+	border-radius: 6px 6px 0 0;
+}
+
+.wow-hud #main-bar {
+	background:
+		var(--wow-hud-bar-left) 0 0 / 256px 43px no-repeat,
+		var(--wow-hud-bar-right) 256px 0 / 256px 43px no-repeat;
+}
+
+.wow-hud #main-bar::before,
+.wow-hud #main-bar::after {
+	content: '';
+	position: absolute;
+	bottom: 0;
+	width: 128px;
+	height: 128px;
+	background: var(--wow-hud-endcap) 0 0 / 100% 100% no-repeat;
+	pointer-events: none;
+	z-index: 2;
+}
+.wow-hud #main-bar::before { left: -96px; }
+.wow-hud #main-bar::after { right: -96px; transform: scaleX(-1); }
 
 #xp-bar {
-	width: 100%;
-	height: 10px !important;
-}
-
-#xp-bar i {
-	background: #8a46c8 !important;
+	position: absolute !important;
+	left: 0;
+	bottom: 100%;
+	width: 512px;
+	height: 11px !important;
+	--fill: #8a2be2;
+	border: 1px solid #000;
 }
 
 #xp-bar b {
-	line-height: 10px !important;
 	font-size: 9px !important;
+	line-height: 9px !important;
 }
 
 #action-bar {
+	position: absolute;
+	left: 8px;
+	top: 3px;
 	display: flex;
-	gap: 4px;
-	pointer-events: auto;
+	gap: 6px;
 }
 
 #action-bar button {
 	position: relative;
-	width: 44px;
-	height: 44px;
+	width: 36px;
+	height: 36px;
 	padding: 0;
-	border: 1px solid var(--line);
-	border-radius: 4px;
-	background: #1b1f25 center / cover no-repeat;
-	color: var(--text);
-	font-size: 10px;
-	overflow: hidden;
+	border: 0;
+	border-radius: 0;
+	background: #111 center / cover no-repeat;
+	color: #fff;
+	cursor: pointer;
 }
 
-#action-bar button.locked {
-	filter: grayscale(1) brightness(0.5);
+/* The slot's bevelled border over the icon, the highlight over that while pointed at. */
+#action-bar button::after,
+#action-bar button::before {
+	content: '';
+	position: absolute;
+	inset: -14px;
+	pointer-events: none;
 }
+.wow-hud #action-bar button::after { background: var(--wow-hud-slot) 0 0 / 100% 100% no-repeat; }
+body:not(.wow-hud) #action-bar button { outline: 1px solid #5a5040; }
+.wow-hud #action-bar button:hover::before { inset: 0; background: var(--wow-hud-slot-highlight) 0 0 / 100% 100% no-repeat; z-index: 3; }
+body:not(.wow-hud) #action-bar button:hover { outline-color: #ffd200; }
+#action-bar button:active { transform: translateY(1px); }
 
-#action-bar button.active {
-	border-color: var(--accent);
-	box-shadow: 0 0 6px var(--accent);
+/* Attacking: the checked glow, pulsing. */
+#action-bar button .glow {
+	position: absolute;
+	inset: 0;
+	display: none;
+	z-index: 3;
+	animation: hud-pulse 1s ease-in-out infinite alternate;
+	box-shadow: inset 0 0 8px 2px #ffd200;
 }
+.wow-hud #action-bar button .glow { box-shadow: none; background: var(--wow-hud-slot-checked) 0 0 / 100% 100% no-repeat; }
+#action-bar button.active .glow { display: block; }
+@keyframes hud-pulse { from { opacity: 0.35; } to { opacity: 1; } }
+
+/* Out of mana, rage or energy: tinted blue; out of range: red (as the game does). */
+#action-bar button.nopower { box-shadow: inset 0 0 0 40px rgba(40, 60, 255, 0.5); }
+#action-bar button.range { box-shadow: inset 0 0 0 40px rgba(255, 30, 30, 0.45); }
 
 #action-bar button .key {
 	position: absolute;
 	top: 1px;
-	right: 3px;
-	font-size: 11px;
-	font-weight: 700;
-	text-shadow: 0 1px 2px #000;
+	right: 2px;
+	font: 12px 'Arial Narrow', system-ui, sans-serif;
+	color: #ddd;
+	text-shadow: 1px 1px 0 #000;
+	z-index: 4;
 }
 
 #action-bar button .label {
 	position: absolute;
-	inset: auto 2px 2px;
-	line-height: 1.1;
-	text-shadow: 0 1px 2px #000;
+	inset: auto 1px 2px;
+	font-size: 9px;
+	line-height: 1;
+	text-shadow: 1px 1px 0 #000;
+	z-index: 4;
 }
 
+/* The cooldown sweeps round clockwise as it runs out. */
 #action-bar button .cooldown {
 	position: absolute;
 	inset: 0;
-	background: rgba(0, 0, 0, 0.6);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 14px;
-	font-weight: 700;
+	background: conic-gradient(transparent calc((1 - var(--left, 1)) * 360deg), rgba(0, 0, 0, 0.7) 0);
+	font: 700 15px 'Arial Narrow', system-ui, sans-serif;
+	color: #ffd200;
+	text-shadow: 1px 1px 0 #000;
+	z-index: 2;
+}
+
+/* A spell's tooltip, where the game puts it: above the bottom right of the screen. */
+#spell-tooltip {
+	position: absolute;
+	right: 16px;
+	bottom: 70px;
+	width: 290px;
+	padding: 8px 10px;
+	background: rgba(0, 0, 0, 0.88);
+	border: 1px solid #5a5a6a;
+	border-radius: 5px;
+	font-size: 13px;
+	color: #fff;
+	line-height: 1.35;
+}
+.wow-ui #spell-tooltip {
+	border: 5px solid transparent;
+	border-image: var(--wow-tooltip-border) 16 / 16px / 0 round;
+	background: rgba(9, 9, 26, 0.9);
+}
+#spell-tooltip .title { font-size: 15px; }
+#spell-tooltip .row { display: flex; justify-content: space-between; gap: 12px; }
+#spell-tooltip .desc { color: #ffd200; margin-top: 4px; }
+#spell-tooltip .need { color: #ff2020; }
+
+@media (max-width: 760px) {
+	#adventure-bottom { transform: translateX(-50%) scale(0.7); transform-origin: bottom center; }
+	#unit-frames { transform: scale(0.8); transform-origin: top left; }
 }
 
 #adventure-messages {
@@ -2626,3 +2832,42 @@ body.wow-ui {
 .spell-row small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
 .spell-row button { flex-shrink: 0; }
 .spell-icon { width: 40px; height: 40px; border: 1px solid #b49754; border-radius: 4px; }
+
+/* The leveling guide's step, beside the minimap as the guide addon puts it. */
+#guide-box {
+	position: fixed;
+	right: 12px;
+	top: calc(var(--bar) + 250px);
+	width: 280px;
+	padding: 8px 10px;
+	background: var(--panel);
+	border-radius: 6px;
+	font-size: 13px;
+	line-height: 1.35;
+	z-index: 4;
+}
+.wow-ui #guide-box {
+	border: 5px solid transparent;
+	border-image: var(--wow-tooltip-border) 16 / 16px / 0 round;
+	background: rgba(9, 9, 26, 0.85);
+}
+body:has(#menu details[open]) #guide-box { visibility: hidden; }
+#guide-box .guide-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	color: #ffd200;
+	font-size: 12px;
+}
+#guide-box .guide-head button { padding: 0 6px; font-size: 16px; }
+#guide-lines div { margin-top: 3px; }
+#guide-box .guide-way { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--muted); }
+#guide-arrow { display: inline-block; color: #ffd200; font-size: 18px; transition: transform 0.1s linear; }
+.tone-friendly { color: #00ff25; }
+.tone-enemy { color: #ff5e5e; }
+.tone-loot { color: #00bcd4; }
+.tone-pick { color: #db7093; }
+.tone-buy, .tone-gold { color: #ffd700; }
+.tone-warn { color: #ff8c00; }
+.guide-file input { max-width: 100%; }

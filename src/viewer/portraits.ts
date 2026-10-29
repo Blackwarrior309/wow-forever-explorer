@@ -15,6 +15,8 @@ const FACING = Math.PI + 0.45;
 /** Vertical field of view (degrees), and the room left round the model (share of its size). */
 const FOV = 26;
 const MARGIN = 1.08;
+/** A portrait shows this share of the model's height, from the top. */
+const HEAD_SHARE = 0.3;
 
 /**
  * Pictures of travel forms for the picker: each look loaded on its own, standing in its first
@@ -43,11 +45,19 @@ export class Portraits {
 		this.scene.add(rim);
 	}
 
-	/** Draws a look width by height pixels; resolves to the picture, or null when it has no model. */
-	async draw(look: CharacterLook, width: number, height: number): Promise<Blob | null> {
+	/** Draws a look width by height pixels (head only for a unit frame); resolves to the picture, or null when it has no model. */
+	async draw(look: CharacterLook, width: number, height: number, head = false): Promise<Blob | null> {
 		const loaded = await this.storage.loadCharacter(look.race, look.sex, look.hd, look.look, [ANIM.Stand], look.outfit, false);
-		if (!loaded) return null;
-		const data = loaded.model;
+		return loaded ? this.drawModel(loaded.model, width, height, head) : null;
+	}
+
+	/** A creature spawn's head and shoulders, for the target frame; null when it has no model. */
+	async drawCreature(displayId: number, variant: string | undefined, width: number, height: number): Promise<Blob | null> {
+		const loaded = await this.storage.loadCreature(displayId, variant, [ANIM.Stand]);
+		return loaded ? this.drawModel(loaded.model, width, height, true) : null;
+	}
+
+	private async drawModel(data: ModelData, width: number, height: number, head: boolean): Promise<Blob | null> {
 		const geometry = new THREE.BufferGeometry();
 		geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
 		geometry.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
@@ -85,7 +95,10 @@ export class Portraits {
 		mesh.matrix.copy(MODEL_BASIS).multiply(new THREE.Matrix4().makeRotationZ(FACING));
 		mesh.updateMatrixWorld(true);
 		try {
-			this.frame(posedBounds(data, standRow).applyMatrix4(mesh.matrix), width / height);
+			const box = posedBounds(data, standRow).applyMatrix4(mesh.matrix);
+			// A unit frame's portrait: the top of the model (the head on people), not all of it.
+			if (head) box.min.y = Math.max(box.min.y, box.max.y - (box.max.y - box.min.y) * HEAD_SHARE);
+			this.frame(box, width / height);
 			this.scene.add(mesh);
 			this.renderer.setSize(width, height, false);
 			const shade = terrainShadowUniforms.uTerrainShade.value;

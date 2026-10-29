@@ -187,6 +187,26 @@
 			</div>
 		</details>
 
+		<details id="guide" name="menu">
+			<summary>Guide</summary>
+			<div class="menu-body panel">
+				<p class="muted small">Follow a RestedXP-style leveling guide: choose its file (a .txt or .lua of guides). It stays in this browser and is never uploaded.</p>
+				<label class="guide-file">Guide file <input type="file" id="guide-file" accept=".txt,.lua,text/plain"></label>
+				<div class="flight-grid">
+					<label for="guide-race">Race</label>
+					<select id="guide-race" class="span"></select>
+					<label for="guide-class">Class</label>
+					<select id="guide-class" class="span"></select>
+					<label for="guide-section">Guide</label>
+					<select id="guide-section" class="span"></select>
+				</div>
+				<div id="guide-status" class="muted small" aria-live="polite">No guide loaded.</div>
+				<label><input type="checkbox" id="guide-shown"> Show the step on screen</label>
+				<label title="In Adventure mode: once its quests are taken, done or handed in, or its place reached"><input type="checkbox" id="guide-auto"> Move on by itself</label>
+				<div class="flight-buttons"><button id="guide-prev">Back</button> <button id="guide-next" class="primary">Next step</button> <button id="guide-fly" title="Fly the camera over the step's place">Fly there</button></div>
+			</div>
+		</details>
+
 		<details id="adventure" name="menu">
 			<summary>Adventure</summary>
 			<div class="menu-body panel">
@@ -315,27 +335,43 @@
 
 	<div id="nameplates" aria-hidden="true"></div>
 
+	<!-- The leveling guide's step (see guideHud.ts). -->
+	<div id="guide-box" hidden>
+		<div class="guide-head"><span id="guide-title"></span><span><button id="guide-box-prev" class="plain" title="Previous step" aria-label="Previous step">‹</button><button id="guide-box-next" class="plain" title="Next step" aria-label="Next step">›</button></span></div>
+		<div id="guide-lines"></div>
+		<div class="guide-way"><span id="guide-arrow" aria-hidden="true" hidden>▲</span><span id="guide-distance"></span></div>
+	</div>
+
 	<!-- Adventure mode: unit frames, action bar, experience, quest tracker, messages, floating numbers. -->
 	<div id="adventure-hud" hidden>
+		<!-- As the game lays them out: the player frame top left, the target beside it (see viewer.css). -->
 		<div id="unit-frames">
 			<div id="player-frame" class="unit-frame">
-				<div class="unit-head"><span class="unit-name"></span><span class="unit-level"></span></div>
+				<img class="portrait" alt="">
+				<div class="unit-name"></div>
 				<div class="bar health"><i></i><b></b></div>
 				<div class="bar power"><i></i><b></b></div>
+				<div class="unit-level"></div>
 			</div>
 			<div id="target-frame" class="unit-frame" hidden>
-				<div class="unit-head"><span class="unit-name"></span><span class="unit-level"></span></div>
+				<img class="portrait" alt="">
+				<div class="unit-name"></div>
 				<div class="bar health"><i></i><b></b></div>
+				<div class="bar power"><i></i><b></b></div>
+				<div class="unit-level"></div>
 			</div>
 		</div>
 		<div id="adventure-messages" aria-live="polite"></div>
 		<div id="floats" aria-hidden="true"></div>
 		<div id="quest-tracker"></div>
 		<div id="adventure-bottom">
-			<div id="cast-bar" class="bar" hidden><i></i><b></b></div>
-			<div id="action-bar"></div>
-			<div id="xp-bar" class="bar"><i></i><b></b></div>
+			<div id="cast-bar" hidden><div class="bar"><i></i><s></s></div><b></b></div>
+			<div id="main-bar">
+				<div id="xp-bar" class="bar"><i></i><b></b></div>
+				<div id="action-bar"></div>
+			</div>
 		</div>
+		<div id="spell-tooltip" hidden></div>
 		<div id="death-box" class="panel" hidden><p>You died.</p><button id="release" class="primary">Release spirit</button></div>
 	</div>
 	<div id="quest-dialog" class="panel" hidden role="dialog" aria-labelledby="quest-title">

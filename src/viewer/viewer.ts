@@ -2516,7 +2516,9 @@ export class Viewer {
 			if (surface > -Infinity) return { surface, sea: false };
 		}
 		const here = this.terrain.locate(p.x, p.z);
-		if (!here?.continent.apart && !here?.continent.building && p.y < 0 && this.terrain.surfaceAt(p.x, p.z) < p.y && this.terrain.isSea(p.x, p.z)) {
+		// Open sea only off the continents' coasts: a dungeon's below sea level (laid out in the sea
+		// south of them) is no sea, its own water comes as liquid meshes above.
+		if (!here?.continent.instance && p.y < 0 && this.terrain.surfaceAt(p.x, p.z) < p.y && this.terrain.isSea(p.x, p.z)) {
 			return { surface: 0, sea: true };
 		}
 		return null;
@@ -2547,8 +2549,8 @@ export class Viewer {
 			}
 		}
 		const here = this.terrain.locate(p.x, p.z);
-		// Not in a map laid out apart (no sea there) or over a building-only one (the sea opens up).
-		if (!here?.continent.apart && !here?.continent.building && p.y < 0 && this.terrain.surfaceAt(p.x, p.z) < p.y && this.terrain.isSea(p.x, p.z)) {
+		// Only off the continents' coasts: not in a dungeon, raid or other map laid out in the sea.
+		if (!here?.continent.instance && p.y < 0 && this.terrain.surfaceAt(p.x, p.z) < p.y && this.terrain.isSea(p.x, p.z)) {
 			return { kind: 'ocean', type: this.liquidLooks?.ocean ?? 0, surface: 0 };
 		}
 		return null;

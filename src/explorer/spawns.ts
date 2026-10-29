@@ -553,7 +553,7 @@ export class DisplayResolver {
 		let hdEyes = 0;
 		for (const [optionId, choiceId] of picks) {
 			// Choice field 5 is its order within the option, which matches the old colour index.
-			const optionName = option.getString(optionId, 0);
+			const optionName = OPTION_KINDS[option.getString(optionId, 0) ?? ''];
 			if (optionName === 'Hair Color') hairColor = choice.getInt(choiceId, 5) ?? 0;
 			if (optionName === 'Skin Color') skinColor = choice.getInt(choiceId, 5) ?? 0;
 			for (const e of elementsByChoice.get(choiceId) ?? []) {
@@ -771,6 +771,18 @@ const SLOT_FEET = 6;
 const SLOT_HANDS = 8;
 const SLOT_TABARD = 9;
 const SLOT_BACK = 10;
+/**
+ * The appearance options the looks need, by their name in the install's language: the names
+ * are all there is to tell them by (an install has only its own language's strings).
+ * shortcut: English and German only; add a locale's names when an install in it shows bald or pale NPCs.
+ */
+const OPTION_KINDS: Record<string, 'Hair Color' | 'Skin Color' | 'Hair Style' | 'Eye Color'> = {
+	'Hair Color': 'Hair Color', Haarfarbe: 'Hair Color',
+	'Skin Color': 'Skin Color', Hautfarbe: 'Skin Color',
+	'Hair Style': 'Hair Style', Frisur: 'Hair Style',
+	'Eye Color': 'Eye Color', Augenfarbe: 'Eye Color',
+};
+
 /** A group-0 geoset no model has: choosing it hides every hairstyle (under a hood or helm). */
 const HIDE_HAIR = 99;
 /** ItemDisplayInfo field 15: a helmet's HelmetGeosetData rule for male and female wearers. */

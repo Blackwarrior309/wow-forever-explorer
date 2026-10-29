@@ -378,6 +378,33 @@ function supportsClipControl(): boolean {
 /** WoW world coordinates (x north, y west, z up) on a map -> where that map sits in the world. */
 /** A guide waypoint's pillar of light, yards tall. */
 const BEACON_HEIGHT = 400;
+/** The guide's way on the ground: yards wide, above the ground, between samples (at least), most samples, ms between rebuilds, chevrons a second. */
+const GUIDE_PATH_WIDTH = 1.6;
+const GUIDE_PATH_LIFT = 0.25;
+const GUIDE_PATH_STEP = 2;
+const GUIDE_PATH_SAMPLES = 3000;
+const GUIDE_PATH_REBUILD = 700;
+const GUIDE_PATH_FLOW = 1.2;
+/** Farthest (yards) the walker can be from the way and still have it start at their feet. */
+const GUIDE_PATH_FROM_WALKER = 4000;
+
+/** A chevron pointing up the texture (along the way), drawn once. */
+function chevronTexture(): THREE.Texture {
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = 64;
+	const g = canvas.getContext('2d')!;
+	g.strokeStyle = '#fff';
+	g.lineWidth = 12;
+	g.lineCap = g.lineJoin = 'round';
+	g.beginPath();
+	g.moveTo(10, 42);
+	g.lineTo(32, 20);
+	g.lineTo(54, 42);
+	g.stroke();
+	const texture = new THREE.CanvasTexture(canvas);
+	texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+	return texture;
+}
 
 function worldFromWow(placement: ContinentPlacement, x: number, y: number, z: number): THREE.Vector3 {
 	return new THREE.Vector3(MAP_ORIGIN - y + placement.offsetX * TILE_SIZE, z, MAP_ORIGIN - x + placement.offsetY * TILE_SIZE);
@@ -941,6 +968,77 @@ export class Viewer {
 		const ground = this.terrain.heightAt(b.position.x, b.position.z);
 		if (Number.isFinite(ground)) b.userData.ground = ground;
 		b.position.y = (Number.isFinite(ground) ? ground : this.camera.position.y - 50) + BEACON_HEIGHT / 2;
+	}
+
+	/** The guide's way ahead: a strip of moving chevrons along the ground through its waypoints. */
+	private guidePath: THREE.Vector3[] = [];
+	private guidePathMesh: THREE.Mesh | null = null;
+	private guidePathAsked = 0;
+	private guidePathBuilt = -Infinity;
+
+	/** Lays the way through these points (WoW coordinates, in order), from the walker if walking; empty hides it. */
+	async setGuidePath(spots: { mapId: number; x: number; y: number }[]): Promise<void> {
+		const asked = ++this.guidePathAsked;
+		const placements = await Promise.all(spots.map((s) => this.placementFor(s.mapId)));
+		if (asked !== this.guidePathAsked) return;
+		// Only the stretch on the map shown; a point elsewhere ends the way there.
+		const end = placements.findIndex((p) => !p);
+		this.guidePath = spots.slice(0, end < 0 ? spots.length : end).map((s, i) => worldFromWow(placements[i]!, s.x, s.y, 0));
+		this.guidePathBuilt = -Infinity;
+	}
+
+	/** Rebuilds the strip now and then: the walker moves and ground loads in as it comes near. */
+	private updateGuidePath(dt: number, now: number): void {
+		const texture = (this.guidePathMesh?.material as THREE.MeshBasicMaterial | undefined)?.map;
+		if (texture) texture.offset.y -= dt * GUIDE_PATH_FLOW;
+		if (now - this.guidePathBuilt < GUIDE_PATH_REBUILD) return;
+		this.guidePathBuilt = now;
+		const first = this.guidePath[0];
+		// From the walker, unless far off (another continent, say).
+		const fromWalker = this.walker.active && first && Math.hypot(first.x - this.walker.position.x, first.z - this.walker.position.z) < GUIDE_PATH_FROM_WALKER;
+		const points = fromWalker ? [this.walker.position.clone(), ...this.guidePath] : this.guidePath;
+		if (points.length < 2) {
+			if (this.guidePathMesh) this.guidePathMesh.visible = false;
+			return;
+		}
+		let length = 0;
+		for (let i = 1; i < points.length; i++) length += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
+		const step = Math.max(GUIDE_PATH_STEP, length / GUIDE_PATH_SAMPLES);
+		// Samples along the way on the ground; null where the ground hasn't loaded.
+		const samples: ({ x: number; y: number; z: number; d: number } | null)[] = [];
+		let d = 0;
+		for (let i = 1; i < points.length; i++) {
+			const a = points[i - 1], b = points[i];
+			const len = Math.hypot(b.x - a.x, b.z - a.z);
+			const n = Math.max(1, Math.ceil(len / step));
+			for (let k = i === 1 ? 0 : 1; k <= n; k++) {
+				const x = a.x + ((b.x - a.x) * k) / n, z = a.z + ((b.z - a.z) * k) / n;
+				const h = this.terrain.heightAt(x, z);
+				samples.push(Number.isFinite(h) ? { x, y: Math.max(h, 0) + GUIDE_PATH_LIFT, z, d: d + (len * k) / n } : null);
+			}
+			d += len;
+		}
+		const position: number[] = [], uv: number[] = [];
+		const half = GUIDE_PATH_WIDTH / 2;
+		for (let i = 1; i < samples.length; i++) {
+			const a = samples[i - 1], b = samples[i];
+			if (!a || !b) continue;
+			const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+			const sx = (-(b.z - a.z) / len) * half, sz = ((b.x - a.x) / len) * half;
+			const va = a.d / GUIDE_PATH_WIDTH, vb = b.d / GUIDE_PATH_WIDTH;
+			position.push(a.x - sx, a.y, a.z - sz, a.x + sx, a.y, a.z + sz, b.x + sx, b.y, b.z + sz, a.x - sx, a.y, a.z - sz, b.x + sx, b.y, b.z + sz, b.x - sx, b.y, b.z - sz);
+			uv.push(0, va, 1, va, 1, vb, 0, va, 1, vb, 0, vb);
+		}
+		if (!this.guidePathMesh) {
+			const material = new THREE.MeshBasicMaterial({ map: chevronTexture(), color: 0xffd200, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
+			this.guidePathMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+			this.guidePathMesh.frustumCulled = false;
+			this.scene.add(this.guidePathMesh);
+		}
+		const geometry = this.guidePathMesh.geometry;
+		geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+		geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+		this.guidePathMesh.visible = position.length > 0;
 	}
 
 	/** The walking character's feet. */
@@ -2003,6 +2101,7 @@ export class Viewer {
 		this.remotePlayers?.update(dt);
 		this.adventure?.update(dt);
 		this.updateBeacon();
+		this.updateGuidePath(dt, now);
 
 		liquidTime.value = now / 1000;
 		animateFlipbooks(now / 1000);

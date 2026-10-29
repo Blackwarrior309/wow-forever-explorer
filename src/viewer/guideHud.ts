@@ -6,7 +6,8 @@ import type { Viewer } from './viewer';
 /**
  * A leveling guide followed in the world: the Guide menu loads the player's own guide file (kept
  * in this browser only), builds the route for their character and shows the step to do in a box
- * at the side, with an arrow and distance to its waypoint and a pillar of light standing there.
+ * at the side, with an arrow and distance to its waypoint, a pillar of light standing there and
+ * the way to it and the next steps' places laid on the ground.
  * In Adventure mode a step moves on by itself once its quests are taken, done or handed in.
  */
 
@@ -14,6 +15,8 @@ const STATE_KEY = 'mapExplorer.guide';
 /** Close enough to a step's place (yards) for a step that's only travel to count as done. */
 const ARRIVED = 8;
 const CHECK_EVERY = 500;
+/** How many steps ahead the way on the ground goes. */
+const PATH_STEPS = 8;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -138,6 +141,7 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 		save();
 		if (!step) {
 			void viewer.setWaypoint(null);
+			void viewer.setGuidePath([]);
 			return;
 		}
 		guideSelect.value = step.guide;
@@ -155,9 +159,17 @@ export function setUpGuide(viewer: Viewer, storage: AsyncStorageApi): void {
 		}));
 		target = null;
 		void viewer.setWaypoint(null);
+		// The way: this step's waypoints and those of the steps after it, in order.
+		const ahead = steps.slice(index, index + PATH_STEPS).flatMap((s) => s.goto);
+		const asked = index;
+		void Promise.all(ahead.map(locate)).then((spots) => {
+			if (asked !== index) return;
+			// Up to a place it can't find or on another continent.
+			const end = spots.findIndex((s) => !s || s.mapId !== spots[0]?.mapId);
+			void viewer.setGuidePath(spots.slice(0, end < 0 ? spots.length : end) as { mapId: number; x: number; y: number }[]);
+		});
 		const last = step.goto.at(-1);
 		if (last) {
-			const asked = index;
 			void locate(last).then((spot) => {
 				if (asked !== index || !spot) return;
 				target = spot;

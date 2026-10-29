@@ -24,6 +24,7 @@ import { setVolume, volumeSetting, type VolumeChannel } from './volume';
 import { WorldMap } from './worldMap';
 import { setHeard } from './audioOut';
 import { readEnabled as soundSaved } from './music';
+import { MultiplayerRoom, playerName, roomName } from './multiplayer';
 import { keptVersions, productName, sessionHost, setKeptVersions, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -512,6 +513,7 @@ async function explore(): Promise<void> {
 		setUpTravel(viewer, minimapArrow);
 		setUpWalking(viewer);
 		setUpEmotes(viewer);
+		setUpTogether(viewer);
 		setUpSound(viewer);
 		setUpHelp();
 		// And on foot, the character where it stood, once its look is set.
@@ -1243,6 +1245,83 @@ const EMOTE_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
  * and 0), whether the interface is shown or not, with Shift or Repeat over and over. Which emote
  * is on which key, and Repeat, are remembered.
  */
+const TOGETHER_KEY = 'mapExplorer.together';
+
+/** Exploring with others in a room: the Together menu (see multiplayer.ts). */
+function setUpTogether(viewer: Viewer): void {
+	const name = $<HTMLInputElement>('together-name');
+	const room = $<HTMLInputElement>('together-room');
+	const join = $<HTMLButtonElement>('together-join');
+	const leave = $<HTMLButtonElement>('together-leave');
+	const status = $('together-status');
+	const list = $('together-players');
+	const saved = readSaved<{ name: string; room: string }>(TOGETHER_KEY);
+	if (typeof saved.name === 'string') name.value = saved.name;
+	if (typeof saved.room === 'string') room.value = saved.room;
+	// The version too: world positions only line up between players of the same build.
+	const product = $<HTMLSelectElement>('product');
+	const realm = `${product.value}-${product.selectedOptions[0]?.textContent ?? ''}`;
+	let current: MultiplayerRoom | null = null;
+	let sender = 0;
+	let where = '';
+	let shown = '';
+	const showPlayers = () => {
+		const players = viewer.remotePlayers?.list ?? [];
+		const names = players.map((p) => (p.kind === 'fly' ? `${p.name} (visitor)` : p.name)).sort();
+		const key = names.join('\n');
+		if (key === shown) return;
+		shown = key;
+		list.replaceChildren(...names.map((n) => Object.assign(document.createElement('li'), { textContent: n })));
+		if (current) status.textContent = `In room “${where}”: ${players.length ? `${players.length} here besides you` : 'nobody else here yet'}`;
+	};
+	const reset = () => {
+		clearInterval(sender);
+		current = null;
+		viewer.remotePlayers?.clear();
+		shown = '';
+		showPlayers();
+		join.disabled = name.disabled = room.disabled = false;
+		leave.disabled = true;
+	};
+	join.addEventListener('click', async () => {
+		if (current || join.disabled) return;
+		const me = playerName(name.value);
+		where = roomName(room.value);
+		name.value = me;
+		room.value = where;
+		save(TOGETHER_KEY, { name: me, room: where });
+		join.disabled = name.disabled = room.disabled = true;
+		try {
+			current = await MultiplayerRoom.join(
+				realm,
+				where,
+				(id, state) => {
+					viewer.remotePlayers?.set(id, state);
+					showPlayers();
+				},
+				(s, detail) => {
+					if (s === 'connected') {
+						shown = '\0';
+						showPlayers();
+					} else status.textContent = s === 'connecting' ? `Connecting to room “${where}”…` : `Not connected${detail ? ` (${detail})` : ''}; trying again…`;
+				},
+			);
+		} catch (e) {
+			status.textContent = `Couldn’t join: ${(e as Error).message}`;
+			reset();
+			return;
+		}
+		leave.disabled = false;
+		sender = window.setInterval(() => current?.send(viewer.playerState(me)), 50);
+	});
+	leave.addEventListener('click', () => {
+		current?.leave();
+		reset();
+		status.textContent = 'Left the room';
+	});
+	window.addEventListener('pagehide', () => current?.leave());
+}
+
 function setUpEmotes(viewer: Viewer): void {
 	const saved = readSaved<{ keys: string[]; repeat: boolean }>(EMOTE_KEY);
 	const byKey = new Map(EMOTES.map((e) => [e.key, e]));

@@ -4,3 +4,4 @@ release/
 out/
 .cache/
 *.stackdump
+package-lock.json

@@ -45,6 +45,9 @@ const FALLBACK: Partial<Record<number, number[]>> = {
 /** Sequences played once and held on their last frame; the rest loop. */
 const ONCE = new Set<number>([ANIM.JumpStart, ANIM.JumpEnd]);
 
+/** What the drawn character follows: the local walker, or another player's (see remotePlayers.ts). */
+export type WalkerView = Pick<WalkControls, 'active' | 'firstPerson' | 'facing' | 'position' | 'state' | 'intent' | 'airTime' | 'velocity' | 'moveSpeed' | 'jumped' | 'walkMode' | 'turning' | 'scale'>;
+
 /**
  * Who the character is: a race and sex, the classic or HD model, and which of their NPC looks it
  * wears, or a whole outfit (an NPC's look with its weapons) for its race.
@@ -58,7 +61,7 @@ export interface CharacterLook {
 }
 
 /** World axes from a model's (x forward, y left, z up): forward is north (-z), left is west (-x). */
-const MODEL_BASIS = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0));
+export const MODEL_BASIS = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0));
 
 /** A clip playing: which, how far in (s), how fast, and whether it plays once and holds its last frame rather than looping. */
 interface Playing {
@@ -203,7 +206,7 @@ class Animator {
 	}
 
 	/** What to play for the walker now, and how fast. */
-	private choose(dt: number, w: WalkControls): Choice {
+	private choose(dt: number, w: WalkerView): Choice {
 		const { x: forward, y: right } = w.intent;
 		const moving = forward !== 0 || right !== 0;
 		const landed = this.wasState === 'air' && w.state !== 'air';
@@ -260,7 +263,7 @@ class Animator {
 		return this.current?.clip.id ?? ANIM.Stand;
 	}
 
-	update(dt: number, walker: WalkControls): void {
+	update(dt: number, walker: WalkerView): void {
 		const { id, rate, once = ONCE.has(id), restart } = this.choose(dt, walker);
 		const clip = this.find(id);
 		if (!this.current || this.current.clip !== clip || restart) {
@@ -523,8 +526,20 @@ export class Character {
 		return true;
 	}
 
+	/** Where its name goes: the model's placement (z up) and height; null while no model is drawn. */
+	get head(): { matrix: THREE.Matrix4; height: number } | null {
+		return this.model && this.group.visible ? { matrix: this.model.group.matrix, height: this.model.height } : null;
+	}
+
+	/** Lets go of the model and its textures and leaves the scene; a load still under way is dropped. */
+	dispose(): void {
+		this.wanted = '';
+		this.setModel(null);
+		this.group.removeFromParent();
+	}
+
 	/** Follows the walker: its place, size, the way it faces, its animation; hidden when the camera's in its head. */
-	update(dt: number, walker: WalkControls): void {
+	update(dt: number, walker: WalkerView): void {
 		this.group.visible = walker.active && !walker.firstPerson;
 		if (!walker.active) {
 			// Back on foot later, it stands rather than carrying on where it left off.
@@ -563,7 +578,7 @@ export class Character {
  * as the game does diving. Not while the swimming-up animation (already leaning up) plays, nor
  * swimming backwards.
  */
-function swimTilt(walker: WalkControls, animator: Animator): number {
+function swimTilt(walker: WalkerView, animator: Animator): number {
 	if (walker.state !== 'swim' || walker.intent.x < 0) return 0;
 	if (animator.playing === ANIM.SwimUp && animator.has(ANIM.SwimUp)) return 0;
 	const up = walker.velocity.y;
@@ -573,7 +588,7 @@ function swimTilt(walker: WalkControls, animator: Animator): number {
 }
 
 /** The body's turn from the facing for the way the character moves (see Character). */
-export function bodyTurn(walker: WalkControls): number {
+export function bodyTurn(walker: WalkerView): number {
 	const { x: forward, y: right } = walker.intent;
 	if (!right || walker.state === 'swim') return 0;
 	// Sideways: face that way. Forward diagonals: halfway. Backward diagonals: turned the other way, backing off.

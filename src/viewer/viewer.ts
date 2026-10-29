@@ -9,6 +9,7 @@ import type { WmoArea } from '../explorer/music';
 import type { Place } from '../explorer/places';
 import type { SpawnInfo } from '../explorer/spawns';
 import { Character, type CharacterLook } from './character';
+import { RemotePlayers } from './remotePlayers';
 import { Portraits } from './portraits';
 import type { Emote } from './emotes';
 import type { CharacterRace } from '../explorer/spawns';
@@ -27,6 +28,7 @@ import { mouseSpeed, setMouseSpeed } from './look';
 import { MapLabels } from './mapLabels';
 import { DAY, LightFade, Lighting, Sky, sunDirection } from './lighting';
 import { MusicPlayer, type MusicTarget } from './music';
+import type { PlayerState } from './multiplayer';
 import { Nameplates, type Plate, type Side } from './nameplates';
 import { CLUTTER_RANGE_DEFAULT, ClutterManager } from './clutter';
 import { headPosition, ObjectManager } from './objects';
@@ -396,6 +398,8 @@ export class Viewer {
 	private readonly walker: WalkControls;
 	/** The walking character as drawn; set up with the objects. */
 	private character: Character | null = null;
+	/** Everyone else in the multiplayer room, once the world has loaded. */
+	remotePlayers: RemotePlayers | null = null;
 	/** Who walks: race, sex, model and look (the default a Stormwind City Guard on the classic model). */
 	private characterLook: CharacterLook = { race: 1, sex: 0, hd: false, look: 0, outfit: 'guard' };
 	private portraitRenderer: Portraits | null = null;
@@ -854,6 +858,28 @@ export class Viewer {
 		return this.portraitRenderer;
 	}
 
+	/** What this player shows the others in the room: the character walking, else the camera flying. */
+	playerState(name: string): PlayerState {
+		const w = this.walker;
+		const walking = w.active;
+		const at = walking ? w.position : this.camera.position;
+		return {
+			name,
+			kind: walking ? 'walk' : 'fly',
+			look: this.look,
+			position: [at.x, at.y, at.z],
+			facing: walking ? w.facing : this.controls.yaw,
+			state: walking ? w.state : 'ground',
+			intent: walking ? [w.intent.x, w.intent.y] : [0, 0],
+			velocity: walking ? [w.velocity.x, w.velocity.y, w.velocity.z] : [0, 0, 0],
+			moveSpeed: walking ? w.moveSpeed : 0,
+			jumped: walking && w.jumped,
+			walkMode: walking && w.walkMode,
+			turning: walking ? w.turning : 0,
+			emote: this.emoting?.key ?? null,
+		};
+	}
+
 	/** Who walks: race, sex, model and look. */
 	get look(): CharacterLook {
 		return { ...this.characterLook };
@@ -1083,6 +1109,7 @@ export class Viewer {
 		this.setUpWalker();
 		this.character = new Character(this.storage, this.usesCompressedTextures, anisotropy, prepare);
 		this.scene.add(this.character.group);
+		this.remotePlayers = new RemotePlayers(this.scene, () => new Character(this.storage, this.usesCompressedTextures, anisotropy, prepare));
 		// Walking creatures follow the ground.
 		this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);
 		this.clutter = new ClutterManager(this.storage, this.usesCompressedTextures, anisotropy, prepare);
@@ -1780,6 +1807,7 @@ export class Viewer {
 				if (this.plates.length > NAMEPLATE_MAX) {
 					this.plates.sort((a, b) => a.distance - b.distance).length = NAMEPLATE_MAX;
 				}
+			this.remotePlayers?.plates(this.plates);
 			// Like the game, only name NPCs you could actually see. Underground (caves, mines) the
 			// terrain surface is overhead, so only buildings count.
 			const cam = this.camera.position;
@@ -1880,6 +1908,7 @@ export class Viewer {
 			}
 		}
 		this.character?.update(dt, this.walker);
+		this.remotePlayers?.update(dt);
 
 		liquidTime.value = now / 1000;
 		animateFlipbooks(now / 1000);

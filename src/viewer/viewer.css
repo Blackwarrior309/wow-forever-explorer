@@ -956,7 +956,8 @@ body.reordering * {
 	padding: 8px;
 }
 
-#goto-query {
+#goto-query,
+#together input {
 	width: 100%;
 	font: inherit;
 	font-size: 13px;
@@ -967,7 +968,8 @@ body.reordering * {
 	padding: 4px 8px;
 }
 
-#goto-query:focus {
+#goto-query:focus,
+#together input:focus {
 	outline: none;
 	border-color: var(--accent);
 }
@@ -1613,7 +1615,7 @@ body.wow-ui {
 }
 
 /* InputBoxTemplate: the framed text box. */
-.wow-ui :is(#goto-query, #highlight-query) {
+.wow-ui :is(#goto-query, #highlight-query, #together input) {
 	border-style: solid;
 	border-width: 0 8px;
 	border-radius: 0;
@@ -2341,4 +2343,9 @@ body.wow-ui {
 	white-space: pre-line;
 	overflow-wrap: anywhere;
 	user-select: text;
+}
+
+#together-players {
+	margin: 4px 0 0;
+	padding-left: 18px;
 }

@@ -187,6 +187,22 @@
 			</div>
 		</details>
 
+		<details id="together" name="menu">
+			<summary>Together</summary>
+			<div class="menu-body panel">
+				<p class="muted small">Explore with friends who have the same game version: everyone in the same room sees each other, on foot or flying as a visitor. Only your name, look and place are sent, through a public server anyone who knows the room can read.</p>
+				<div class="flight-grid">
+					<label for="together-name">Name</label>
+					<input id="together-name" class="span" maxlength="24" autocomplete="off" spellcheck="false">
+					<label for="together-room">Room</label>
+					<input id="together-room" class="span" maxlength="32" autocomplete="off" spellcheck="false" placeholder="azeroth">
+				</div>
+				<div class="flight-buttons"><button id="together-join" class="primary">Join</button> <button id="together-leave" disabled>Leave</button></div>
+				<div id="together-status" class="muted small" aria-live="polite"></div>
+				<ul id="together-players" class="small"></ul>
+			</div>
+		</details>
+
 		<details id="emotes" name="menu">
 			<summary>Emotes</summary>
 			<div class="menu-body panel">

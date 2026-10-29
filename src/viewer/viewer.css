@@ -2617,3 +2617,12 @@ body.wow-ui {
 	margin-left: 6px;
 	font-size: 11px;
 }
+
+.adventure-window { position: fixed; top: calc(var(--bar) + 40px); left: 16px; width: min(590px, calc(100vw - 32px)); max-height: calc(100vh - var(--bar) - 70px); overflow: auto; z-index: 8; }
+.adventure-window .quest-head { display: flex; align-items: center; justify-content: space-between; }
+.adventure-window h2 { color: #ffd200; font-size: 17px; }
+.spell-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #ffffff22; }
+.spell-row > div { flex: 1; min-width: 0; }
+.spell-row small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
+.spell-row button { flex-shrink: 0; }
+.spell-icon { width: 40px; height: 40px; border: 1px solid #b49754; border-radius: 4px; }

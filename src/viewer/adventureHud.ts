@@ -37,6 +37,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	const messages = $('adventure-messages');
 	const floats = $('floats');
 	const bar = $('action-bar');
+	window.addEventListener('pagehide', () => adventure.save());
 	const book = el('section', { id: 'spellbook', className: 'panel adventure-window', hidden: true, role: 'dialog' });
 	book.setAttribute('aria-label', 'Spellbook');
 	const bookTitle = el('h2', { textContent: 'Spellbook' });
@@ -82,20 +83,22 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	// --- The menu ---
 	classSelect.replaceChildren(...CLASSES.map((c) => new Option(c.name, String(c.id))));
 	classSelect.value = String(adventure.cls.id);
-	classSelect.addEventListener('change', () => {
-		const cls = Number(classSelect.value);
-		if (cls === adventure.cls.id) return;
-		if (adventure.level > 1 || (adventure.quests?.log.length ?? 0) > 0) {
-			if (!confirm(`Start a new ${classSelect.selectedOptions[0].text} at level 1? Your level ${adventure.level} ${adventure.cls.name} and its quests are lost.`)) {
-				classSelect.value = String(adventure.cls.id);
-				return;
-			}
-		}
-		adventure.newCharacter(cls);
+	const characterSelect = $<HTMLSelectElement>('character-select');
+	const characterName = $<HTMLInputElement>('character-name');
+	characterSelect.addEventListener('change', () => {
+		if (!adventure.selectCharacter(characterSelect.value)) characterSelect.value = adventure.characterId;
+		trainer.hidden = dialog.hidden = true;
 	});
 	$('adventure-new').addEventListener('click', () => {
-		if (confirm('Start again at level 1 without quests? This character is lost.')) adventure.newCharacter(Number(classSelect.value));
+		if (!characterName.value.trim()) return adventure.onMessage('Enter a character name first', true);
+		adventure.newCharacter(Number(classSelect.value), characterName.value);
+		trainer.hidden = dialog.hidden = true;
 	});
+	$('character-rename').onclick = () => {
+		if (!characterName.value.trim()) return adventure.onMessage('Enter a character name first', true);
+		adventure.name = [...characterName.value.replace(/[\p{C}]/gu, '').trim()].slice(0, 24).join('');
+		adventure.save(); adventure.onChange();
+	};
 	try {
 		on.checked = localStorage.getItem(ON_KEY) === '1';
 	} catch {
@@ -111,12 +114,6 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	};
 	on.addEventListener('change', apply);
 	apply();
-	try {
-		const together = JSON.parse(localStorage.getItem('mapExplorer.together') ?? '{}') as { name?: string };
-		if (typeof together.name === 'string' && together.name) adventure.name = together.name;
-	} catch {
-		// Adventurer.
-	}
 
 	// --- Messages ---
 	adventure.onMessage = (text, error) => {
@@ -310,6 +307,8 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	};
 	adventure.onChange = () => {
 		classSelect.value = String(adventure.cls.id);
+		characterSelect.replaceChildren(...adventure.characters.map((s) => new Option(`${s.name} · ${CLASSES.find((c) => c.id === s.state.cls)?.name ?? 'Warrior'} · ${s.state.level}`, s.id)));
+		characterSelect.value = adventure.characterId;
 		buildBar();
 		void loadIcons();
 		showLog();

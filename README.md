@@ -13,6 +13,13 @@ A fork of [Coldensjo/ClassicWowMapExplorer](https://github.com/Coldensjo/Classic
 
 Built for WoW Classic, with Eastern Kingdoms and Kalimdor loaded as one seamless world.
 
+## Adventure characters and training
+
+- **Characters:** in Adventure, enter a name, choose a new class and press **Create character**. Switch with the Character dropdown; the existing character is kept. Each slot stores its name, class, level, XP, copper, quest progress, learned abilities and appearance. The old single-character save is imported as the first slot. Saves belong to this browser and website address; localhost and GitHub Pages have separate saves. Switching or creating is blocked in combat or while dead.
+- **Spellbook:** press **P** while Adventure is on, or use **Spellbook (P)** in its menu. It lists your class abilities, costs, range, cast time, cooldown and level requirements. Learned abilities can be cast from the book or their numbered action-bar slots. Escape closes the book. Outside Adventure, P still takes a screenshot.
+- **Targeting:** left- or right-click an NPC or creature to select it, including creatures already fighting. A second click attacks an enemy; friendly quest givers and class trainers open their dialog. Holding and dragging the right button still controls the camera.
+- **Class trainers:** 208 class trainers are identified from the local VMaNGOS source tables. Visit a friendly trainer for your class within 6 yards, out of combat. Level-1 abilities are known immediately; later abilities are learned for **10 copper × required level**, with simplified Adventure pricing. Existing saves keep the abilities their current level previously unlocked. Trainers for professions, riding and pets are not included. `bun run game -- path/to/data` also rebuilds `public/game/trainers.json`.
+
 ## In the browser (Windows)
 
 You need **World of Warcraft Forever** (or Classic) installed and **Chrome** or **Edge**.

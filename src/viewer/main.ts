@@ -1145,7 +1145,7 @@ function setUpWalking(viewer: Viewer): void {
 		new Option('NPC looks', ''),
 	);
 	const saved = readSaved<CharacterLook>(WALK_KEY);
-	let look: CharacterLook = { ...viewer.look, ...saved };
+	let look: CharacterLook = { ...viewer.look, ...saved, ...viewer.adventure?.savedLook };
 	let races: CharacterRace[] = [];
 	/** Looks for the race, sex and model chosen. */
 	const lookCount = () => {
@@ -1183,6 +1183,7 @@ function setUpWalking(viewer: Viewer): void {
 		void viewer.setLook(look);
 	};
 	// Not needed for the first view (see Viewer.firstView).
+	viewer.onLookChange = (next) => { look = { ...next }; save(WALK_KEY, look); show(); };
 	viewer.firstView.then(() => viewer.characterRaces()).then((list) => {
 		races = list;
 		picker.setRaces(list);
@@ -1312,7 +1313,6 @@ function setUpTogether(viewer: Viewer): void {
 			});
 			const joined = current;
 			if (viewer.adventure) {
-				viewer.adventure.name = me;
 				viewer.adventure.net = { me: joined.id, sendEvent: (e) => joined.sendEvent(e), sendMobs: (m) => joined.sendMobs(m) };
 			}
 		} catch (e) {

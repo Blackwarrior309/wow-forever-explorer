@@ -105,6 +105,31 @@ test('class trainers check class, level, money and distance and teach abilities 
 	expect(a.trainerProblem('k1')).toContain('does not teach');
 });
 
+test('creating and switching characters preserves progress and clears temporary combat state', () => {
+	const { adventure: a } = world();
+	const original = a.characterId;
+	a.name = 'First Warrior'; a.level = 4; a.xp = 123; a.money = 75;
+	a.quests!.accept(783, a.player);
+	a.newCharacter(8, 'Second Mage');
+	const mage = a.characterId;
+	expect(mage).not.toBe(original);
+	expect(a.cls.id).toBe(8);
+	expect(a.level).toBe(1);
+	expect(a.money).toBe(0);
+	expect(a.quests!.log).toEqual([]);
+	a.shield = 99;
+	expect(a.selectCharacter(original)).toBe(true);
+	expect(a.name).toBe('First Warrior');
+	expect(a.level).toBe(4);
+	expect(a.xp).toBe(123);
+	expect(a.money).toBe(75);
+	expect(a.quests!.log).toContain(783);
+	expect(a.shield).toBe(0);
+	expect(a.selectCharacter(mage)).toBe(true);
+	expect(a.name).toBe('Second Mage');
+	expect(a.quests!.log).toEqual([]);
+});
+
 test('a hostile wolf notices the player, fights, dies and gives experience', () => {
 	const { adventure: a, hidden, player, walker } = world();
 	run(a, 0.3);

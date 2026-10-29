@@ -191,16 +191,20 @@
 			<summary>Adventure</summary>
 			<div class="menu-body panel">
 				<label class="check"><input type="checkbox" id="adventure-on"> Fight and do quests on foot</label>
-				<p class="muted small">Walk on the ground (<kbd>`</kbd>). Click a creature to target it and again to attack, or press <kbd>Tab</kbd> for the nearest; <kbd>1</kbd> attacks, <kbd>2</kbd>–<kbd>7</kbd> use your abilities. Click quest givers marked ! or ? to talk. Your character is kept in this browser.</p>
+				<p class="muted small">Walk on the ground (<kbd>`</kbd>). Left- or right-click a creature to target it and again to attack, or press <kbd>Tab</kbd> for the nearest; <kbd>1</kbd> attacks, <kbd>2</kbd>–<kbd>7</kbd> use abilities. <kbd>P</kbd> opens the spellbook in Adventure mode. Click quest givers or your class trainer to talk. Right-drag still turns the camera. Characters are saved separately in this browser.</p>
 				<div class="flight-grid">
-					<label for="adventure-class">Class</label>
+					<label for="character-select">Character</label>
+					<select id="character-select" class="span"></select>
+					<label for="character-name">Name</label>
+					<input id="character-name" maxlength="24" placeholder="Name for a new character" class="span">
+					<label for="adventure-class">New class</label>
 					<select id="adventure-class" class="span"></select>
 				</div>
 				<div id="adventure-summary" class="muted small"></div>
 				<button id="spellbook-open">Spellbook (P)</button>
 				<h3 class="travel-heading">Quest log</h3>
 				<ul id="quest-log" class="small"></ul>
-				<div class="flight-buttons"><button id="adventure-new" title="Start again at level 1 with the class chosen, without quests">New character</button></div>
+				<div class="flight-buttons"><button id="adventure-new" title="Create another character without replacing the current one">Create character</button><button id="character-rename">Rename current</button></div>
 			</div>
 		</details>
 

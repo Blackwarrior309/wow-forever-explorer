@@ -923,10 +923,12 @@ export class Viewer {
 	get look(): CharacterLook {
 		return { ...this.characterLook };
 	}
+	onLookChange: (look: CharacterLook) => void = () => {};
 
 	/** Changes who walks; resolves to how many looks that race and sex have (0 when it couldn't be dressed). */
 	setLook(look: CharacterLook): Promise<number> {
 		this.characterLook = { ...look };
+		this.onLookChange(this.look);
 		this.dressed = null;
 		// Dressed now if it's out walking; otherwise when it next is.
 		return this.walker.active ? this.dressCharacter() : Promise.resolve(this.character?.looks ?? 0);
@@ -1159,6 +1161,8 @@ export class Viewer {
 			floorAt: (x, z, near) => this.walker.floorAt(x, z, near + 2, near - 6)?.y ?? NaN,
 			race: () => this.characterLook.race,
 			female: () => this.characterLook.sex === 1,
+			look: () => this.look,
+			restoreLook: (look) => { void this.setLook(look); },
 		});
 		// Walking creatures follow the ground.
 		this.objects.groundAt = (x, z) => this.terrain.heightAt(x, z);

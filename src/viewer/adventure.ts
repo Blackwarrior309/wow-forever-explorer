@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { CharacterRoster, characterStorage, type CharacterSave } from '../game/characters';
 import type { SpawnInfo } from '../explorer/spawns';
 import { classById, GLOBAL_COOLDOWN, MELEE_RANGE, SWING_TIME, type Ability, type ClassInfo } from '../game/classes';
-import { QuestBook, type Giver, type Marker, type QuestData, type QuestSave } from '../game/quests';
+import { QuestBook, type Giver, type Marker, type QuestData } from '../game/quests';
 import { gainXp, hitChance, isElite, killXp, mobStats, playerHealth, playerMana, questXp, sideOf, weaponDamage, type MobStats } from '../game/rules';
-import type { Character } from './character';
+import type { Character, CharacterLook } from './character';
 import { ACTIONS, type Emote } from './emotes';
 import type { CombatEvent, MobState } from './multiplayer';
 import type { Plate } from './nameplates';
@@ -55,6 +56,8 @@ export interface AdventureWorld {
 	/** The player's race (for its side and quests). */
 	race: () => number;
 	female: () => boolean;
+	look?: () => CharacterLook;
+	restoreLook?: (look: CharacterLook) => void;
 }
 
 /** How the page talks to the others in the room (see main.ts); null alone. */
@@ -112,16 +115,7 @@ export interface FloatText {
 }
 
 /** What's kept between visits. */
-interface Saved {
-	cls: number;
-	level: number;
-	xp: number;
-	money: number;
-	quests: QuestSave;
-	learned?: string[];
-}
-
-const SAVE_KEY = 'mapExplorer.adventure';
+type Saved = CharacterSave;
 /** SpawnInfo.rank by template rank (see spawns.ts). */
 const RANK_NAMES = ['', 'Elite', 'Rare Elite', 'Boss', 'Rare'];
 
@@ -234,13 +228,15 @@ export class Adventure {
 	// --- Saving ---------------------------------------------------------------------------------
 
 	private saved: Saved | null = null;
+	private readonly roster = new CharacterRoster(characterStorage());
+	get characters() { return this.roster.list(); }
+	get characterId(): string { return this.roster.current.id; }
+	get savedLook(): CharacterLook | undefined { return this.saved?.look; }
 
 	private load(): void {
-		try {
-			this.saved = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as Saved | null;
-		} catch {
-			this.saved = null;
-		}
+		this.saved = this.roster.current.state;
+		this.name = this.roster.current.name;
+		if (this.saved.look) this.world.restoreLook?.(this.saved.look);
 		const s = this.saved;
 		if (s) {
 			this.cls = classById(s.cls);
@@ -255,17 +251,15 @@ export class Adventure {
 	}
 
 	save(): void {
-		const s: Saved = { cls: this.cls.id, level: this.level, xp: this.xp, money: this.money, learned: [...this.learned], quests: this.quests?.snapshot() ?? this.saved?.quests ?? { active: [], done: [], bag: {} } };
+		const s: Saved = { cls: this.cls.id, level: this.level, xp: this.xp, money: this.money, learned: [...this.learned], look: this.world.look?.(), quests: this.quests?.snapshot() ?? this.saved?.quests ?? { active: [], done: [], bag: {} } };
 		this.saved = s;
-		try {
-			localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-		} catch {
-			// Not kept; it still plays on for this visit.
-		}
+		this.roster.update(this.name, s);
 	}
 
-	/** Changes class (starting over at level 1 with no quests) or starts a fresh character. */
-	newCharacter(cls: number): void {
+	/** Adds a separate character at level 1; the previous slot is kept. */
+	newCharacter(cls: number, name = 'Adventurer'): void {
+		if (this.inCombat || !this.alive) return this.onMessage('Leave combat and revive before creating a character', true);
+		this.save();
 		this.reset();
 		this.cls = classById(cls);
 		this.level = 1;
@@ -276,8 +270,22 @@ export class Adventure {
 		if (this.quests) this.quests = new QuestBook(this.quests.data);
 		this.saved = null;
 		this.learned = new Set(this.abilities.filter((a) => a.level === 1).map((a) => a.id));
+		this.roster.create(name, { cls: this.cls.id, level: 1, xp: 0, money: 0, quests: { active: [], done: [], bag: {} }, learned: [...this.learned] });
+		this.name = this.roster.current.name;
+		this.cooldowns.clear(); this.gcdUntil = 0; this.buff = { damage: 0, until: 0 }; this.shield = 0; this.hots.length = 0;
 		this.save();
 		this.onChange();
+	}
+
+	selectCharacter(id: string): boolean {
+		if (id === this.characterId) return true;
+		if (this.inCombat || !this.alive) { this.onMessage('Leave combat and revive before switching characters', true); return false; }
+		if (!this.characters.some((s) => s.id === id)) return false;
+		this.save(); this.reset(); this.roster.select(id); this.load();
+		this.cooldowns.clear(); this.gcdUntil = 0; this.buff = { damage: 0, until: 0 }; this.shield = 0; this.hots.length = 0;
+		if (this.quests) this.quests = new QuestBook(this.quests.data, this.saved?.quests);
+		this.onChange();
+		return true;
 	}
 
 	/** Turns Adventure mode on or off; off, every fight ends. */

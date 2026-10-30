@@ -54,6 +54,7 @@ export interface StorageApi {
 	loadWorldMaps(mapIds: number[]): WorldMapInfo[];
 	loadTalents(classId: number): TalentTree[];
 	loadRacials(race: number, classId: number): SpellText[];
+	loadItemIcons(ids: number[]): number[];
 }
 
 export type AsyncStorageApi = {

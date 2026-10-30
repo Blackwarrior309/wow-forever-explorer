@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { decodeEvent, decodeMobs, decodeState, encodeState, playerName, roomName, type PlayerState } from '../src/viewer/multiplayer';
+import { chatText, decodeEvent, decodeMobs, decodeState, encodeState, playerName, roomName, type PlayerState } from '../src/viewer/multiplayer';
 
 const walking: PlayerState = {
 	name: 'Thrall',
@@ -66,4 +66,10 @@ test('combat events and mob reports are checked like states', () => {
 	] }));
 	expect(mobs).toEqual([{ k: 'k1', e: 299, l: 3, hp: 50, max: 50, m: 0, p: [1, 2, 3], f: 0.5, s: 0, t: 'abc', w: 4 }]);
 	expect(decodeMobs('[]')).toBeNull();
+});
+
+test('chat lines are made safe and short', () => {
+	expect(chatText('  hallo \u0007zusammen ')).toBe('hallo zusammen');
+	expect(chatText(42)).toBe('');
+	expect(chatText('x'.repeat(500))).toHaveLength(200);
 });

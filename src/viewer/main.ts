@@ -26,7 +26,7 @@ import { setHeard } from './audioOut';
 import { readEnabled as soundSaved } from './music';
 import { setUpAdventure } from './adventureHud';
 import { setUpGuide } from './guideHud';
-import { MultiplayerRoom, playerName, roomName } from './multiplayer';
+import { CHAT_MAX, MultiplayerRoom, playerName, roomName } from './multiplayer';
 import { keptVersions, productName, sessionHost, setKeptVersions, setQuickSwitching, quickSwitching, type SwitchState, type ViewerSession } from './session';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -971,7 +971,7 @@ function fillList(id: string, rows: [string, string][]): void {
 // --- The minimap ---
 
 function setUpMinimap(viewer: Viewer, arrow: HTMLCanvasElement | null): void {
-	const minimap = new Minimap($('minimap'), storage, () => viewer.minimapView(), (mapId, x, y) => viewer.flyOver(mapId, x, y), arrow);
+	const minimap = new Minimap($('minimap'), storage, () => viewer.minimapView(), (mapId, x, y) => viewer.flyOver(mapId, x, y), arrow, () => viewer.minimapMarks());
 	$('minimap-in').addEventListener('click', () => minimap.zoomBy(-1));
 	$('minimap-out').addEventListener('click', () => minimap.zoomBy(1));
 }
@@ -1274,6 +1274,38 @@ function setUpTogether(viewer: Viewer): void {
 	let sender = 0;
 	let where = '';
 	let shown = '';
+
+	// Chat while in a room: the last lines bottom left, Enter to say something.
+	const chat = Object.assign(document.createElement('div'), { id: 'chat', hidden: true });
+	const chatLog = Object.assign(document.createElement('div'), { className: 'chat-log' });
+	const chatInput = Object.assign(document.createElement('input'), { className: 'chat-input', maxLength: CHAT_MAX, placeholder: 'Say something (Enter)', spellcheck: false });
+	chat.append(chatLog, chatInput);
+	document.body.append(chat);
+	const say = (who: string, text: string, mine = false) => {
+		const line = document.createElement('div');
+		const name = Object.assign(document.createElement('b'), { textContent: `[${who}]: ` });
+		if (mine) line.className = 'mine';
+		line.append(name, text);
+		chatLog.append(line);
+		while (chatLog.children.length > 50) chatLog.firstElementChild!.remove();
+		chatLog.scrollTop = chatLog.scrollHeight;
+		// Old lines fade unless the chat is in use.
+		setTimeout(() => line.classList.add('old'), 30000);
+	};
+	chatInput.addEventListener('keydown', (e) => {
+		e.stopPropagation();
+		if (e.code === 'Escape') chatInput.blur();
+		if (e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
+		e.preventDefault();
+		if (chatInput.value.trim() && current?.sendChat(chatInput.value)) say(name.value, chatInput.value.trim().slice(0, CHAT_MAX), true);
+		chatInput.value = '';
+		chatInput.blur();
+	});
+	window.addEventListener('keydown', (e) => {
+		if (!current || chat.hidden || isTyping(e) || (e.code !== 'Enter' && e.code !== 'NumpadEnter')) return;
+		e.preventDefault();
+		chatInput.focus();
+	});
 	const showPlayers = () => {
 		const players = (viewer.remotePlayers?.list ?? []).map((p) => ({ ...p, label: p.kind === 'fly' ? `${p.name} (visitor)` : p.name })).sort((a, b) => a.label.localeCompare(b.label));
 		const key = players.map((p) => `${p.id} ${p.label}`).join('\n');
@@ -1295,6 +1327,7 @@ function setUpTogether(viewer: Viewer): void {
 		current = null;
 		if (viewer.adventure) viewer.adventure.net = null;
 		viewer.remotePlayers?.clear();
+		chat.hidden = true;
 		shown = '';
 		showPlayers();
 		join.disabled = name.disabled = room.disabled = false;
@@ -1323,6 +1356,7 @@ function setUpTogether(viewer: Viewer): void {
 					} else status.textContent = s === 'connecting' ? `Connecting to room “${where}”…` : `Not connected${detail ? ` (${detail})` : ''}; trying again…`;
 				},
 				event: (from, event) => viewer.adventure?.receiveEvent(from, event),
+				chat: (from, text) => say(viewer.remotePlayers?.player(from)?.state.name ?? 'Someone', text),
 				mobs: (from, mobs) => viewer.adventure?.receiveMobs(from, mobs.flatMap((m) => {
 					const p = local(m.m, m.p);
 					return p ? [{ ...m, p }] : [];
@@ -1341,6 +1375,7 @@ function setUpTogether(viewer: Viewer): void {
 			return;
 		}
 		leave.disabled = false;
+		chat.hidden = false;
 		sender = window.setInterval(() => current?.send(viewer.playerState(me)), 50);
 	});
 	leave.addEventListener('click', () => {

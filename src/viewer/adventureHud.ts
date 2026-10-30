@@ -3,6 +3,7 @@ import { questText, type Giver } from '../game/quests';
 import { money, questXp, sideOf, weaponDamage } from '../game/rules';
 import type { AsyncStorageApi } from '../worker/protocol';
 import { setUpBooks } from './bookHud';
+import { CLASS_COLORS, setUpGameMenus } from './gameMenus';
 import { Icons } from './icons';
 import { isTyping } from './typing';
 import type { Viewer } from './viewer';
@@ -49,6 +50,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		},
 		changed: () => adventure.onChange(),
 	});
+	const menus = setUpGameMenus(viewer, storage, icons, { toggleSpellbook: () => books.toggleSpellbook(), toggleTalents: () => books.toggleTalents() });
 	$('spellbook-open').onclick = () => books.toggleSpellbook();
 	$('talents-open').onclick = () => books.toggleTalents();
 	$('adventure-level-up').onclick = () => adventure.levelUp();
@@ -189,7 +191,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 
 	// --- Keys: in capture, ahead of the emotes on the number keys and the world map on Tab ---
 	window.addEventListener('keydown', (e) => {
-		if (e.code === 'Escape' && !isTyping(e) && (!trainer.hidden || books.close())) { trainer.hidden = true; e.stopImmediatePropagation(); return; }
+		if (e.code === 'Escape' && !isTyping(e) && (!trainer.hidden || [books.close(), menus.close()].some(Boolean))) { trainer.hidden = true; e.stopImmediatePropagation(); return; }
 		if (adventure.enabled && (e.code === 'KeyP' || e.code === 'KeyN') && !isTyping(e) && !e.ctrlKey && !e.metaKey && !e.altKey) {
 			e.preventDefault(); e.stopImmediatePropagation();
 			if (!e.repeat) (e.code === 'KeyP' ? books.toggleSpellbook() : books.toggleTalents());
@@ -327,6 +329,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 		void loadIcons();
 		showLog();
 		books.refresh();
+		menus.refresh();
 		renderTrainer();
 	};
 	adventure.onChange();
@@ -369,6 +372,22 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 	};
 	const floatSpans: HTMLSpanElement[] = [];
 	const breath = $('breath-bar');
+	const party = $('party-frames');
+	/** One frame per other player in Adventure: class-coloured name, level, health; reused from frame to frame. */
+	const showParty = () => {
+		const others = (viewer.remotePlayers?.list ?? []).map((p) => viewer.remotePlayers!.player(p.id)?.state).filter((s) => !!s && s.maxHp > 0).slice(0, 4);
+		while (party.children.length > others.length) party.lastElementChild!.remove();
+		others.forEach((s, i) => {
+			let cell = party.children[i] as HTMLElement | undefined;
+			if (!cell) party.append((cell = el('div', { className: 'party-frame' }, el('span', { className: 'name' }), el('span', { className: 'level' }), el('div', { className: 'bar health' }, el('i'), el('b')))));
+			const name = cell.querySelector<HTMLElement>('.name')!;
+			name.textContent = s!.name;
+			name.style.color = CLASS_COLORS[s!.cls] ?? '#ffd100';
+			cell.querySelector('.level')!.textContent = String(s!.level);
+			cell.classList.toggle('dead', s!.hp <= 0);
+			setBar(cell.querySelector('.bar')!, s!.hp, s!.maxHp, s!.hp <= 0 ? 'Dead' : `${Math.round((100 * s!.hp) / s!.maxHp)}%`);
+		});
+	};
 	const frame = () => {
 		requestAnimationFrame(frame);
 		const shown = adventure.enabled && viewer.walking;
@@ -378,6 +397,7 @@ export function setUpAdventure(viewer: Viewer, storage: AsyncStorageApi): void {
 			if (!dialog.hidden && !adventure.enabled) close();
 			return;
 		}
+		showParty();
 		breath.hidden = adventure.breath >= adventure.maxBreath;
 		if (!breath.hidden) setBar(breath, adventure.breath, adventure.maxBreath, 'Breath');
 		player.querySelector('.unit-name')!.textContent = adventure.name;

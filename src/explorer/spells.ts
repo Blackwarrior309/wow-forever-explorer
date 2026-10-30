@@ -16,7 +16,10 @@ const FILES = {
 	SkillLine: 1240935,
 	SkillLineAbility: 1266278,
 	Spell: 1140089,
+	Item: 841626,
 } as const;
+/** Item.db2's icon file ID field. */
+const ITEM_ICON = 7;
 
 /** The talent tabs of each class (ChrClasses ID): Talent.db2 tab, its SkillLine (for the name) and background. */
 const TABS: Record<number, [number, number, string][]> = {
@@ -212,4 +215,10 @@ export async function loadRacials(storage: CascStorage, race: number, classId: n
 		out.push(text);
 	}
 	return out;
+}
+
+/** Items' icon file IDs (0 for an item the install hasn't). */
+export async function loadItemIcons(storage: CascStorage, ids: number[]): Promise<number[]> {
+	const items = await loadTable(storage, FILES.Item);
+	return ids.map((id) => items.getInt(id, ITEM_ICON) ?? 0);
 }

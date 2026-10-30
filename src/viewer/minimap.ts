@@ -1,5 +1,5 @@
 import type { AsyncStorageApi } from '../worker/protocol';
-import type { MinimapView } from './viewer';
+import type { MinimapMarks, MinimapView } from './viewer';
 
 /** Pixels per tile in a map's picture, made from the game's own minimap images. */
 const CELL = 32;
@@ -40,6 +40,8 @@ export class Minimap {
 		private readonly onPick: (mapId: number, x: number, y: number) => void,
 		/** The game's player arrow (pointing up); without it, one is drawn. */
 		private readonly arrow: HTMLCanvasElement | null = null,
+		/** The guide's way and the other players, drawn over the map. */
+		private readonly marks: () => MinimapMarks = () => ({ path: [], players: [], goal: null }),
 	) {
 		try {
 			const saved = Number(localStorage.getItem(ZOOM_KEY));
@@ -130,7 +132,9 @@ export class Minimap {
 		this.view = view;
 		const ratio = window.devicePixelRatio || 1;
 		const size = Math.round(this.canvas.clientWidth * ratio);
-		const key = view ? `${view.wdt}/${view.x.toFixed(3)}/${view.y.toFixed(3)}/${view.yaw.toFixed(3)}/${size}` : `none/${size}`;
+		const marks: MinimapMarks = view ? this.marks() : { path: [], players: [], goal: null };
+		const spanTiles = SPANS[this.zoom];
+		const key = view ? `${view.wdt}/${view.x.toFixed(3)}/${view.y.toFixed(3)}/${view.yaw.toFixed(3)}/${size}/${marks.path.length}/${marks.goal?.join() ?? ''}/${marks.players.map((p) => p.map((v) => v.toFixed(3)).join()).join(';')}` : `none/${size}`;
 		if (key === this.last && !this.dirty) return;
 		this.last = key;
 		this.dirty = false;
@@ -149,6 +153,30 @@ export class Minimap {
 			ctx.textAlign = 'center';
 			ctx.fillText(view ? (picture ? 'No map here' : 'Reading map…') : 'Open sea', size / 2, size / 2 + 26 * ratio);
 		}
+		// The guide's way (gold, the step's place a dot) and the others in the room (blue dots).
+		const at = ([x, y]: [number, number]): [number, number] => [size / 2 + (x / spanTiles) * size, size / 2 + (y / spanTiles) * size];
+		if (marks.path.length) {
+			ctx.lineJoin = ctx.lineCap = 'round';
+			for (const [width, colour] of [[4, 'rgba(0, 0, 0, 0.6)'], [2, '#ffd200']] as const) {
+				ctx.beginPath();
+				ctx.moveTo(size / 2, size / 2);
+				for (const p of marks.path) ctx.lineTo(...at(p));
+				ctx.lineWidth = width * ratio;
+				ctx.strokeStyle = colour;
+				ctx.stroke();
+			}
+		}
+		const dot = (p: [number, number], fill: string, r: number) => {
+			ctx.beginPath();
+			ctx.arc(...at(p), r * ratio, 0, Math.PI * 2);
+			ctx.fillStyle = fill;
+			ctx.strokeStyle = '#000';
+			ctx.lineWidth = ratio;
+			ctx.fill();
+			ctx.stroke();
+		};
+		if (marks.goal) dot(marks.goal, '#ffd200', 4);
+		for (const p of marks.players) dot(p, '#4aa8ff', 3.5);
 		// The camera: an arrow for its heading. Yaw turns from north toward west, the canvas clockwise.
 		ctx.save();
 		ctx.translate(size / 2, size / 2);

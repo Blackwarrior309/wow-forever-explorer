@@ -128,6 +128,9 @@ const api: AsyncStorageApi = {
 	async loadRacials(race, classId) {
 		return requireWorld().loadRacials(race, classId);
 	},
+	async loadItemIcons(ids) {
+		return requireWorld().loadItemIcons(ids);
+	},
 };
 
 /** Collects typed-array buffers in a result so they move to the main thread instead of being copied. */

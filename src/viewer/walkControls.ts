@@ -66,8 +66,8 @@ const CAMERA_GAP = 0.6;
 const CAMERA_EASE_OUT = 3;
 /** The camera looks at this share of the height above the feet: about the top of the head. */
 const EYE = 0.9;
-/** How long a newly placed character waits for its ground to load before falling anyway (s). */
-const SETTLE_TIMEOUT = 15;
+/** How long a newly placed character waits for its ground to load before falling anyway (s): a dungeon reached through its portal can take a while. */
+const SETTLE_TIMEOUT = 45;
 /**
  * Falling this long means there was nothing under it after all (a gap the game's data leaves
  * open, or ground not loaded): it's put back where it last stood (s).

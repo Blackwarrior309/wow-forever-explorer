@@ -2933,7 +2933,6 @@ body:has(#menu details[open]) #guide-box { visibility: hidden; }
 	border-radius: 6px;
 	user-select: none;
 }
-#spellbook-frame:not([hidden]) ~ #talent-frame { left: 400px; }
 .wow-books .book-frame { width: 384px; height: 512px; background: none; border: 0; border-radius: 0; }
 .wow-books #spellbook-frame { background: var(--book-spellbook) 0 0 no-repeat; }
 .wow-books #talent-frame { background: var(--book-talents) 0 0 no-repeat; }
@@ -3003,3 +3002,81 @@ body:has(#menu details[open]) #guide-box { visibility: hidden; }
 #breath-bar .bar { position: absolute; left: 31px; top: 26px; width: 195px; height: 13px; --fill: #0080ff; }
 .wow-hud #breath-bar { background: var(--wow-hud-castbar) 0 0 / 100% 100% no-repeat; }
 #together-players button { margin-left: 6px; padding: 1px 8px; font-size: 11px; }
+
+/* The others in the room playing Adventure, under the player frame. */
+#party-frames { position: absolute; top: calc(var(--bar) + 110px); left: 14px; display: flex; flex-direction: column; gap: 6px; }
+.party-frame { position: relative; width: 150px; padding: 3px 6px 4px; background: rgba(0, 0, 0, 0.6); border: 1px solid #6d6150; border-radius: 4px; font-size: 12px; }
+.party-frame .name { display: inline-block; max-width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
+.party-frame .level { position: absolute; right: 6px; top: 3px; color: #ffd100; }
+.party-frame .bar { position: relative; height: 10px; margin-top: 2px; }
+.party-frame.dead { filter: grayscale(1); opacity: 0.7; }
+
+/* Chat in a Together room, bottom left as the game's chat frame. */
+#chat { position: fixed; left: 14px; bottom: 120px; width: min(380px, calc(100vw - 28px)); z-index: 6; font-size: 13px; pointer-events: none; }
+#chat .chat-log { max-height: 160px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; text-shadow: 1px 1px 0 #000, 0 0 3px #000; color: #fff; }
+#chat .chat-log > div { transition: opacity 2s; }
+#chat .chat-log > div.old { opacity: 0; }
+#chat:focus-within .chat-log > div.old { opacity: 1; }
+#chat .chat-log b { color: #ffd100; font-weight: normal; }
+#chat .chat-log .mine b { color: #9fd0ff; }
+#chat .chat-input { pointer-events: auto; width: 100%; margin-top: 4px; opacity: 0.35; background: rgba(0, 0, 0, 0.6); border: 1px solid #6d6150; color: #fff; padding: 4px 6px; }
+#chat .chat-input:focus { opacity: 1; }
+
+/* The micro menu and bag bar (gameMenus.ts), bottom right as on the game's main menu bar. */
+#micro-menu { position: fixed; right: 210px; bottom: 6px; display: flex; gap: 0; z-index: 3; }
+#micro-menu .micro { position: relative; width: 28px; height: 58px; padding: 0; min-width: 0; border: 0; border-radius: 0; background: #2a2418; }
+.wow-ui #micro-menu .micro { border-image: none; border-width: 0; padding: 0; }
+#micro-menu .micro:hover { filter: brightness(1.3); }
+.micro-face { position: absolute; left: 6px; top: 28px; width: 17px; height: 24px; object-fit: cover; pointer-events: none; }
+.micro-character { background: var(--book-ui-character) 0 0 / 100% 100% no-repeat !important; }
+.micro-spellbook { background: var(--book-ui-spellbook) 0 0 / 100% 100% no-repeat !important; }
+.micro-talents { background: var(--book-ui-talents) 0 0 / 100% 100% no-repeat !important; }
+.micro-quest { background: var(--book-ui-quest) 0 0 / 100% 100% no-repeat !important; }
+.micro-socials { background: var(--book-ui-socials) 0 0 / 100% 100% no-repeat !important; }
+.micro-world { background: var(--book-ui-world) 0 0 / 100% 100% no-repeat !important; }
+.micro-help { background: var(--book-ui-help) 0 0 / 100% 100% no-repeat !important; }
+#bag-bar { position: fixed; right: 10px; bottom: 8px; display: flex; gap: 3px; align-items: flex-end; z-index: 3; }
+#bag-bar .bag-slot { display: block; width: 30px; height: 30px; padding: 0; min-width: 0; border: 0; border-radius: 0; background: #111 var(--book-ui-bagslot) center / 100% 100% no-repeat; }
+#bag-bar .backpack { width: 37px; height: 37px; background: #111 var(--book-ui-backpack) center / 100% 100% no-repeat !important; border-image: none !important; border-width: 0 !important; }
+#bag-bar .backpack:hover { filter: brightness(1.3); }
+
+/* Character, quest log and social windows: the game's frames. */
+.wow-books #character-frame { background: var(--book-character) 0 0 no-repeat; }
+.wow-books #questlog-frame { background: var(--book-questlog) 0 0 no-repeat; }
+.wow-books #social-frame { background: var(--book-friends) 0 0 no-repeat; }
+.paperdoll-model { position: absolute; left: 66px; top: 74px; width: 232px; height: 230px; object-fit: contain; }
+.paperdoll-stats { position: absolute; left: 72px; top: 306px; width: 220px; font-size: 11px; color: #ffd100; line-height: 12px; }
+.paperdoll-stats .who { color: #fff; text-align: center; margin-bottom: 2px; }
+.paperdoll-stats div { display: flex; justify-content: space-between; }
+.paperdoll-stats b { color: #fff; font-weight: normal; }
+.paperdoll-slot { position: absolute; width: 37px; height: 37px; background: #111 var(--slot) center / 100% 100% no-repeat; box-shadow: 0 0 0 1px #000; }
+.paperdoll-slot:hover { box-shadow: 0 0 0 2px #ffd100; }
+.quest-count { position: absolute; left: 260px; top: 44px; width: 70px; text-align: right; color: #ffd100; }
+.quest-list-frame { position: absolute; left: 22px; top: 76px; width: 316px; height: 150px; overflow: auto; display: flex; flex-direction: column; }
+.quest-entry { text-align: left; background: none !important; border: 0 !important; border-image: none !important; padding: 2px 6px !important; min-width: 0; font-size: 12px; border-radius: 0; }
+.quest-entry.chosen, .quest-entry:hover { background: rgba(255, 210, 0, 0.15) !important; }
+.quest-detail { position: absolute; left: 22px; top: 236px; width: 304px; height: 168px; overflow: auto; padding: 6px; font-size: 12px; color: #000; background: #d9c38c; border: 1px solid #6d6150; }
+.quest-detail h3 { margin: 4px 0; font-size: 14px; color: #3b2a14; }
+.quest-detail p { margin: 0 0 6px; white-space: pre-line; }
+.quest-detail .done { color: #6b6b6b; }
+.quest-abandon, .social-together { position: absolute; left: 22px; top: 412px; height: 22px; padding: 0 10px; min-width: 0; font-size: 11px; }
+.social-list { position: absolute; left: 22px; top: 76px; width: 316px; height: 300px; overflow: auto; }
+.social-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px solid #ffffff14; font-size: 12px; }
+.social-row .name { flex: 1; color: #ffd100; }
+.social-row .info { color: #aaa; }
+.social-row button { padding: 1px 8px; min-width: 0; font-size: 11px; }
+.social-note { position: absolute; left: 22px; top: 384px; width: 316px; color: #aaa; font-size: 12px; }
+
+/* The backpack: the game's container frame, above the bag bar. */
+.bag-frame { position: fixed; right: 12px; bottom: 70px; width: 256px; height: 256px; z-index: 8; background: #1b1712; border: 1px solid #6d6150; }
+.wow-books .bag-frame { background: var(--book-ui-backpackframe) 0 0 no-repeat; border: 0; }
+.bag-title { position: absolute; left: 108px; top: 10px; width: 116px; color: #fff; font-size: 12px; text-align: center; }
+.bag-frame .book-close { left: 228px; top: 6px; }
+.bag-item { position: absolute; width: 37px; height: 37px; background: center / cover no-repeat; }
+.bag-item.full { box-shadow: 0 0 0 1px #000; }
+.bag-item b { position: absolute; right: 2px; bottom: 1px; font-size: 12px; color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000; }
+.bag-money { position: absolute; left: 84px; top: 228px; width: 158px; display: flex; justify-content: flex-end; gap: 8px; color: #fff; font-size: 12px; }
+.bag-money .coin { padding-right: 15px; background: right center / 13px 13px no-repeat; }
+.bag-money .gold { background-image: var(--book-ui-gold); }
+.bag-money .silver { background-image: var(--book-ui-silver); }
+.bag-money .copper { background-image: var(--book-ui-copper); }

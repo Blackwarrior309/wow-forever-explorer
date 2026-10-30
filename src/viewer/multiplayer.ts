@@ -26,6 +26,9 @@ const MAX_MOB_MESSAGE = 16384;
 /** Most mobs one player reports at once. */
 const MAX_MOBS = 40;
 export const NAME_MAX = 24;
+/** Characters in a chat line; and the shortest time between two sent, ms. */
+export const CHAT_MAX = 200;
+const CHAT_EVERY = 500;
 const ROOM_MAX = 32;
 const WORLD_LIMIT = 1e6;
 const ID = /^[a-z0-9]{1,16}$/;
@@ -66,6 +69,11 @@ export interface PlayerState {
 /** A room name as typed, made safe for a topic: lower case letters, digits, - and _. */
 export function roomName(typed: string): string {
 	return typed.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, ROOM_MAX) || 'azeroth';
+}
+
+/** A chat line as typed or received: no control characters, trimmed, at most CHAT_MAX characters; '' for nothing to say. */
+export function chatText(typed: unknown): string {
+	return typeof typed === 'string' ? [...typed.replace(/[\p{C}]/gu, '').trim()].slice(0, CHAT_MAX).join('') : '';
 }
 
 /** A player name as typed: no control characters, trimmed, at most NAME_MAX characters. */
@@ -234,12 +242,15 @@ export interface RoomHandlers {
 	event: (from: string, event: CombatEvent) => void;
 	/** The mobs a player runs (all of them; an empty list when they run none). */
 	mobs: (from: string, mobs: MobState[]) => void;
+	/** A chat line someone in the room said. */
+	chat?: (from: string, text: string) => void;
 }
 
 /**
- * One room on the broker under `mapexplorer/v2/<realm>/<room>/`: `p/<id>` holds each player's
+ * One room on the broker under `mapexplorer/v3/<realm>/<room>/`: `p/<id>` holds each player's
  * state, and an empty message there (sent on leaving, or by the broker when the page is closed)
- * says they've gone; `e/<id>` carries combat events from a player and `m/<id>` the mobs it runs.
+ * says they've gone; `e/<id>` carries combat events from a player, `m/<id>` the mobs it runs and
+ * `c/<id>` what it says in chat.
  * Positions are in their map's own frame, the same in every game version, so the realm can be
  * shared by all of them; another version's player shows where they are, on a map both have.
  */
@@ -273,7 +284,7 @@ export class MultiplayerRoom {
 		});
 		self.client = client;
 		client.on('connect', () => {
-			client.subscribe(['p/+', 'e/+', 'm/+'].map((t) => self.base + t), (err) => self.on.status(err ? 'offline' : 'connected', err?.message));
+			client.subscribe(['p/+', 'e/+', 'm/+', 'c/+'].map((t) => self.base + t), (err) => self.on.status(err ? 'offline' : 'connected', err?.message));
 			// Others learn of us at once rather than at the next heartbeat.
 			self.lastSent = -Infinity;
 		});
@@ -305,6 +316,9 @@ export class MultiplayerRoom {
 		} else if (channel === 'm' && this.seen.has(id)) {
 			const mobs = decodeMobs(text);
 			if (mobs) this.on.mobs(id, mobs);
+		} else if (channel === 'c' && this.seen.has(id)) {
+			const line = chatText(parse(text)?.x);
+			if (line) this.on.chat?.(id, line);
 		}
 	}
 
@@ -335,6 +349,17 @@ export class MultiplayerRoom {
 
 	sendMobs(mobs: MobState[]): void {
 		if (!this.closed && this.client?.connected) this.client.publish(`${this.base}m/${this.id}`, JSON.stringify({ mobs: mobs.slice(0, MAX_MOBS) }), { qos: 0 });
+	}
+
+	private lastChat = -Infinity;
+
+	/** Says a line to the room; false if there's nothing to say, it's too soon after the last or we're offline. */
+	sendChat(typed: string, now = performance.now()): boolean {
+		const x = chatText(typed);
+		if (!x || this.closed || !this.client?.connected || now - this.lastChat < CHAT_EVERY) return false;
+		this.lastChat = now;
+		this.client.publish(`${this.base}c/${this.id}`, JSON.stringify({ x }), { qos: 0 });
+		return true;
 	}
 
 	/** How many others are here now. */

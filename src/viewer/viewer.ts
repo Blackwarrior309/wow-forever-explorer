@@ -87,6 +87,8 @@ const SMALL_SPLASH = 0.7;
 const HOLE_DEPTH = 40;
 /** Yards of slack around area triggers: the camera is a little ball, not a point. */
 const TRIGGER_MARGIN = 1;
+/** On foot, more: the character is a body, and a portal's swirl can hold it back a little. */
+const WALK_TRIGGER_MARGIN = 2.5;
 /**
  * Under water: how far you can see (yards), and the colour for when the zone's light gives none.
  * Water and sea take their colour from the light (LightData's river and ocean colours).
@@ -297,6 +299,16 @@ export interface MinimapView {
 	yaw: number;
 }
 
+/** What the minimap marks, in tiles from where it's centred (east and south positive). */
+export interface MinimapMarks {
+	/** The guide's way ahead, in order. */
+	path: [number, number][];
+	/** The others in the room. */
+	players: [number, number][];
+	/** The guide step's place (its pillar of light), if any. */
+	goal: [number, number] | null;
+}
+
 /**
  * An area trigger that teleports (a dungeon entrance or exit): a sphere, or a box turned about
  * the vertical, in WoW world coordinates on one map, and where it sends you.
@@ -412,14 +424,14 @@ function worldFromWow(placement: ContinentPlacement, x: number, y: number, z: nu
 	return new THREE.Vector3(MAP_ORIGIN - y + placement.offsetX * TILE_SIZE, z, MAP_ORIGIN - x + placement.offsetY * TILE_SIZE);
 }
 
-function insideTrigger(t: AreaTrigger, x: number, y: number, z: number): boolean {
-	if (t.radius > 0) return (x - t.x) ** 2 + (y - t.y) ** 2 + (z - t.z) ** 2 <= (t.radius + TRIGGER_MARGIN) ** 2;
+function insideTrigger(t: AreaTrigger, x: number, y: number, z: number, margin = TRIGGER_MARGIN): boolean {
+	if (t.radius > 0) return (x - t.x) ** 2 + (y - t.y) ** 2 + (z - t.z) ** 2 <= (t.radius + margin) ** 2;
 	const [length, width, height, o] = t.box;
 	const dx = x - t.x;
 	const dy = y - t.y;
 	const along = dx * Math.cos(o) + dy * Math.sin(o);
 	const across = -dx * Math.sin(o) + dy * Math.cos(o);
-	return Math.abs(along) <= length / 2 + TRIGGER_MARGIN && Math.abs(across) <= width / 2 + TRIGGER_MARGIN && Math.abs(z - t.z) <= height / 2 + TRIGGER_MARGIN;
+	return Math.abs(along) <= length / 2 + margin && Math.abs(across) <= width / 2 + margin && Math.abs(z - t.z) <= height / 2 + margin;
 }
 
 export class Viewer {
@@ -1176,8 +1188,9 @@ export class Viewer {
 				return surface > -Infinity && !holeOpen(x, z, surface) ? surface : h;
 			},
 			surface: (x, z) => terrain.surfaceAt(x, z),
-			// A map with no terrain (a dungeon that's one building) is as loaded as it'll get.
-			ready: (x, z) => terrain.detailedAt(x, z) || terrain.surfaceAt(x, z) === -Infinity,
+			// A map with no terrain (a dungeon that's one building) is loaded once its building is
+			// (just arrived through a portal, it can take a while to read).
+			ready: (x, z) => terrain.detailedAt(x, z) || (terrain.surfaceAt(x, z) === -Infinity && objects.nearBuilding(this.walker.position, 2, false)),
 			nearBuilding: (at, margin) => objects.nearBuilding(at, margin),
 			cast: (from, direction, far) => objects.castBuildings(from, direction, far),
 			sweep: (from, move, radius) => objects.sweep(from, move, radius, true),
@@ -1652,8 +1665,11 @@ export class Viewer {
 		const at = this.walker.active ? this.walker.position : this.camera.position;
 		const where = this.wowPosition(at);
 		if (!where || this.teleporting) return;
-		const z = at.y;
-		const hit = this.triggers.get(where.mapId)?.find((t) => insideTrigger(t, where.x, where.y, z));
+		// The character's feet and middle: a portal's trigger can float above the floor before it,
+		// and the swirl itself can stop the character a little short of it.
+		const heights = this.walker.active ? [at.y, at.y + this.walker.height * 0.5] : [at.y];
+		const margin = this.walker.active ? WALK_TRIGGER_MARGIN : TRIGGER_MARGIN;
+		const hit = this.triggers.get(where.mapId)?.find((t) => heights.some((z) => insideTrigger(t, where.x, where.y, z, margin)));
 		if (!this.triggersArmed) {
 			this.triggersArmed = !hit;
 			return;
@@ -1990,6 +2006,18 @@ export class Viewer {
 		if (!at) return null;
 		const c = at.continent;
 		return { mapId: c.mapId, wdt: c.wdt, x: pos.x / TILE_SIZE - c.offsetX, y: pos.z / TILE_SIZE - c.offsetY, yaw: walking ? this.walker.facing : this.controls.yaw };
+	}
+
+	/** The guide's way and the other players, on the map the minimap shows. */
+	minimapMarks(): MinimapMarks {
+		const pos = this.walker.active ? this.walker.position : this.camera.position;
+		const here = this.terrain?.locate(pos.x, pos.z)?.continent;
+		const near = (p: THREE.Vector3): [number, number] | null => (here && this.terrain.locate(p.x, p.z)?.continent === here ? [(p.x - pos.x) / TILE_SIZE, (p.z - pos.z) / TILE_SIZE] : null);
+		return {
+			path: this.guidePath.map(near).filter((p) => p !== null),
+			players: (this.remotePlayers?.list ?? []).map((p) => this.remotePlayers!.player(p.id)?.position).filter((p) => !!p).map(near).filter((p) => p !== null),
+			goal: this.beacon?.visible ? near(this.beacon.position) : null,
+		};
 	}
 
 	/** Flies over a point of a map's tile grid (in local tiles), keeping the height above ground and the heading. */

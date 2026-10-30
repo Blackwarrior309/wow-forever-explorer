@@ -1,6 +1,7 @@
 import type { SpellText, TalentInfo, TalentTree } from '../explorer/spells';
 import { racialAbility, type Ability } from '../game/classes';
 import type { AsyncStorageApi } from '../worker/protocol';
+import { cssImage, el, gameFrame, hideTip, line, quartered, tipAt, closeFrames } from './frames';
 import { imageUrl, type Icons } from './icons';
 import type { Viewer } from './viewer';
 
@@ -44,63 +45,17 @@ const SINGLES = {
 	inactiveTab: 'interface/paperdollinfoframe/ui-character-inactivetab.blp',
 };
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Record<string, unknown> = {}, ...children: (Node | string)[]): HTMLElementTagNameMap[K] {
-	const e = document.createElement(tag);
-	Object.assign(e, props);
-	e.append(...children);
-	return e;
-}
-
-/** Four corner pieces of a frame drawn as one picture: top left, top right, bottom left, bottom right. */
-async function quartered(storage: AsyncStorageApi, paths: string[]): Promise<string> {
-	const [tl, tr, bl, br] = await storage.loadInterfaceImages(paths);
-	if (!tl || !tr || !bl || !br) return '';
-	const canvas = el('canvas', { width: tl.width + tr.width, height: tl.height + bl.height });
-	const g = canvas.getContext('2d')!;
-	const put = (image: typeof tl, x: number, y: number) => g.putImageData(new ImageData(new Uint8ClampedArray(image.rgba), image.width, image.height), x, y);
-	put(tl, 0, 0);
-	put(tr, tl.width, 0);
-	put(bl, 0, tl.height);
-	put(br, bl.width, tl.height);
-	return canvas.toDataURL();
-}
-
 export function setUpBooks(viewer: Viewer, storage: AsyncStorageApi, icons: Icons, hooks: BookHooks) {
 	const adventure = viewer.adventure!;
-	const css = (name: string, url: string) => url && document.body.style.setProperty(`--book-${name}`, `url(${url})`);
 	// The frames' pictures, once; the frames still work (plainly drawn) without them.
-	void quartered(storage, FRAME_PIECES.spellbook).then((u) => css('spellbook', u));
-	void quartered(storage, FRAME_PIECES.talents).then((u) => css('talents', u));
+	void quartered(storage, FRAME_PIECES.spellbook).then((u) => cssImage('spellbook', u));
+	void quartered(storage, FRAME_PIECES.talents).then((u) => cssImage('talents', u));
 	void storage.loadInterfaceImages(Object.values(SINGLES)).then((images) => {
-		Object.keys(SINGLES).forEach((name, i) => images[i] && css(name, imageUrl(images[i]!)));
+		Object.keys(SINGLES).forEach((name, i) => images[i] && cssImage(name, imageUrl(images[i]!)));
 		document.body.classList.add('wow-books');
 	});
 
-	const tip = el('div', { className: 'book-tip', hidden: true });
-	document.body.append(tip);
-	const tipAt = (e: MouseEvent, lines: HTMLElement[]) => {
-		tip.replaceChildren(...lines);
-		tip.hidden = false;
-		const x = Math.min(e.clientX + 18, innerWidth - tip.offsetWidth - 8);
-		const y = Math.min(e.clientY + 18, innerHeight - tip.offsetHeight - 8);
-		tip.style.left = `${x}px`;
-		tip.style.top = `${y}px`;
-	};
-	const hideTip = () => (tip.hidden = true);
-	const line = (className: string, textContent: string) => el('div', { className, textContent });
-
-	const frame = (id: string, title: string) => {
-		const section = el('section', { id, className: 'book-frame', hidden: true, role: 'dialog' });
-		section.setAttribute('aria-label', title);
-		const portrait = el('div', { className: 'book-portrait' });
-		const heading = el('div', { className: 'book-title', textContent: title });
-		const close = el('button', { className: 'book-close', textContent: '×', title: `Close ${title.toLowerCase()}` });
-		close.onclick = () => { section.hidden = true; hideTip(); };
-		section.append(portrait, heading, close);
-		section.addEventListener('contextmenu', (e) => e.preventDefault());
-		document.body.append(section);
-		return { section, portrait, heading };
-	};
+	const frame = gameFrame;
 
 	// --- Racial abilities, from the game's data for the race and class ---
 	let passives: SpellText[] = [];
@@ -318,11 +273,6 @@ export function setUpBooks(viewer: Viewer, storage: AsyncStorageApi, icons: Icon
 			renderTalents();
 		},
 		/** Closes whichever is open; false if neither was. */
-		close(): boolean {
-			const open = !book.section.hidden || !talents.section.hidden;
-			book.section.hidden = talents.section.hidden = true;
-			hideTip();
-			return open;
-		},
+		close: closeFrames,
 	};
 }
